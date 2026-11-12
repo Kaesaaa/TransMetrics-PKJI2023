@@ -1,0 +1,13 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+streamlit
+plotly
+pandas
+numpy
+opencv-python-headless
+ultralytics
+lapx
+requests
+beautifulsoup4
+yt-dlp
