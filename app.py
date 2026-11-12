@@ -7,6 +7,13 @@ Terintegrasi Computer Vision: OpenCV, Ultralytics YOLO11, & ByteTrack Multi-Obje
 ===================================================================================================
 """
 
+import os
+# ── Cloud CPU-Saver: Batasi thread SEBELUM mengimpor pustaka berat ──────────
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "tls_verify;0|timeout;10000000"
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,11 +21,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import time
-import os
 import sys
 import subprocess
 import tempfile
 import cv2
+cv2.setNumThreads(2)
 import re
 import urllib.parse
 import urllib3
@@ -36,11 +43,15 @@ except ImportError:
 
 from ultralytics import YOLO
 
+# ── Cloud CPU-Saver: batasi thread PyTorch ───────────────────────────────────
+try:
+    import torch
+    torch.set_num_threads(2)
+except Exception:
+    pass
+
 # Nonaktifkan peringatan SSL tidak aman (insecure request warnings)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-# Opsi FFmpeg OpenCV untuk bypass verifikasi TLS & timeout jaringan
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "tls_verify;0|timeout;10000000"
 
 # -------------------------------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN STREAMLIT
@@ -1869,14 +1880,21 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 ● FRAME CAPTURE TERAKHIR | Terproses: {st.session_state.cctv_frame_count} Frame ({st.session_state.cctv_elapsed_sec:.1f}s) | Status: Tersimpan & Standby
 </div>""", unsafe_allow_html=True)
         else:
-            # Jika baru dibuka pertama kali, ambil thumbnail preview frame pertama
-            if video_path_to_open is not None:
-                preview_img = get_video_preview(video_path_to_open, line_pos_pct, enable_clahe=enable_clahe)
-                if preview_img is not None:
-                    st.session_state.last_annotated_frame = preview_img
-                    video_placeholder.image(preview_img, channels="RGB", use_container_width=True)
-                    info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:#0f172a; color:#94a3b8; padding:8px 12px; border-radius:6px; margin-top:6px;">
-● THUMBNAIL PREVIEW | Model: {active_model_file} | Garis Hitung: {line_pos_pct}% | Klik 'Mulai Deteksi' untuk memproses
+            # Standby: tampilkan placeholder ringan (0% CPU) — tidak membuka video
+            video_placeholder.markdown("""
+<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-radius:12px;padding:60px 20px;text-align:center;min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+<div style="font-size:48px;margin-bottom:16px;">🎥</div>
+<div style="font-size:18px;font-weight:700;color:#38bdf8;margin-bottom:8px;">TRANS-METRICS Smart CCTV Monitor</div>
+<div style="font-size:13px;color:#94a3b8;margin-bottom:20px;">Pilih sumber video di atas, lalu klik tombol <strong style='color:#22c55e;'>▶️ Mulai Deteksi</strong> untuk memulai pencacahan AI.</div>
+<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+<span style="background:#1e3a5f;color:#38bdf8;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">YOLO11 Engine</span>
+<span style="background:#14532d;color:#22c55e;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">ByteTrack MOT</span>
+<span style="background:#3b1f6b;color:#a78bfa;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">CLAHE Auto-Enhance</span>
+<span style="background:#7c2d12;color:#fb923c;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">Virtual Counting Line</span>
+</div>
+</div>""", unsafe_allow_html=True)
+            info_placeholder.markdown("""<div style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#0f172a;color:#94a3b8;padding:8px 12px;border-radius:6px;margin-top:6px;">
+● STANDBY | Model belum dimuat | Klik 'Mulai Deteksi' untuk memproses video
 </div>""", unsafe_allow_html=True)
 
     # TOMBOL UNDUH BUKTI CAPTURE SURVEI CCTV
@@ -1960,6 +1978,7 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 
             prev_time = time.time()
             frame_idx = 0
+            last_results = None  # Cloud CPU-Saver: simpan hasil frame sebelumnya untuk skip-frame
 
             # Running loop
             while cap.isOpened() and st.session_state.tracking_active:
@@ -1968,7 +1987,23 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                     break
 
                 frame_idx += 1
+                # Cloud CPU-Saver: batasi sesi ke 450 frame (≈15 detik video @30fps)
+                MAX_FRAMES_CLOUD = 450
+                if frame_idx > MAX_FRAMES_CLOUD:
+                    st.session_state.tracking_active = False
+                    break
+
                 elapsed_video_sec = frame_idx / float(video_fps)
+
+                # Cloud CPU-Saver: resize frame ke maks 640px lebar
+                if frame.shape[1] > 640:
+                    scale = 640.0 / frame.shape[1]
+                    new_w = 640
+                    new_h = int(frame.shape[0] * scale)
+                    frame = cv2.resize(frame, (new_w, new_h))
+                    frame_w = new_w
+                    frame_h = new_h
+                    line_y = int(frame_h * (line_pos_pct / 100.0))
 
                 # Preprocessing Peningkatan Kontras Malam / Hujan (CLAHE)
                 if enable_clahe:
@@ -1976,16 +2011,28 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 else:
                     detection_frame = frame
 
-                # Jalankan Tracking YOLO11 + ByteTrack
-                results = model.track(
-                    detection_frame,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    classes=[1, 2, 3, 5, 7],
-                    conf=conf_thresh,
-                    imgsz=640,
-                    verbose=False
-                )
+                # Cloud CPU-Saver: skip-frame — jalankan YOLO setiap 2 frame
+                if frame_idx % 2 == 0:
+                    results = model.track(
+                        detection_frame,
+                        persist=True,
+                        tracker="bytetrack.yaml",
+                        classes=[1, 2, 3, 5, 7],
+                        conf=conf_thresh,
+                        imgsz=480,
+                        verbose=False
+                    )
+                    last_results = results
+                else:
+                    results = last_results if last_results is not None else model.track(
+                        detection_frame,
+                        persist=True,
+                        tracker="bytetrack.yaml",
+                        classes=[1, 2, 3, 5, 7],
+                        conf=conf_thresh,
+                        imgsz=480,
+                        verbose=False
+                    )
 
                 annotated_frame = detection_frame.copy() if enable_clahe else frame.copy()
 
@@ -2149,6 +2196,9 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 st.session_state.cctv_frame_count = frame_idx
                 st.session_state.cctv_video_fps = video_fps
                 st.session_state.last_annotated_frame = frame_rgb
+
+                # Cloud CPU-Saver: jeda 40ms agar server tidak throttled
+                time.sleep(0.04)
 
             cap.release()
             st.session_state.tracking_active = False
