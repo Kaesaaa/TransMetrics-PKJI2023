@@ -602,6 +602,80 @@ def resolve_cctv_url(raw_input: str):
     return raw_clean, camera_title, extracted_channels, "Menggunakan URL mentah", False
 
 
+class FFmpegStreamReader:
+    """
+    Pembaca frame video langsung dari FFmpeg via pipe subprocess.
+    Ideal untuk YouTube Live / googlevideo yang sering gagal di cv2.VideoCapture.
+    Mendukung reconnect otomatis dan output rawvideo BGR24.
+    """
+    FRAME_W = 640
+    FRAME_H = 360
+    FRAME_BYTES = 640 * 360 * 3
+
+    def __init__(self, url: str):
+        self.url = url
+        self.proc = None
+        self.frame_w = self.FRAME_W
+        self.frame_h = self.FRAME_H
+        self.fps = 25.0
+        self._open()
+
+    def _open(self):
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2",
+            "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "-i", self.url,
+            "-vf", f"scale={self.FRAME_W}:{self.FRAME_H}:force_original_aspect_ratio=decrease,pad={self.FRAME_W}:{self.FRAME_H}:(ow-iw)/2:(oh-ih)/2",
+            "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1"
+        ]
+        try:
+            self.proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=10 ** 8
+            )
+        except Exception:
+            self.proc = None
+
+    def isOpened(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    def read(self):
+        if not self.isOpened():
+            return False, None
+        try:
+            raw = self.proc.stdout.read(self.FRAME_BYTES)
+            if len(raw) != self.FRAME_BYTES:
+                return False, None
+            frame = np.frombuffer(raw, dtype=np.uint8).reshape((self.FRAME_H, self.FRAME_W, 3))
+            return True, frame.copy()
+        except Exception:
+            return False, None
+
+    def release(self):
+        if self.proc:
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=3)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+            self.proc = None
+
+    def get(self, prop_id):
+        if prop_id == cv2.CAP_PROP_FPS:
+            return self.fps
+        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(self.frame_w)
+        if prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(self.frame_h)
+        return 0.0
+
+
 class HLSPlaylistReader:
     """
     Pembaca HLS Stream Fallback anti-gagal menggunakan requests (verify=False).
@@ -712,13 +786,15 @@ class HLSPlaylistReader:
 class SmartVideoSource:
     """
     Abstraksi Universal Video Source yang mendukung Webcam, Video File (.mp4/.avi),
-    Direct RTSP/HLS FFmpeg, serta Fallback HLS Playlist Reader jika terkendala SSL.
+    Direct RTSP/HLS FFmpeg, FFmpeg Pipe untuk YouTube Live / googlevideo,
+    serta Fallback HLS Playlist Reader jika terkendala SSL.
     """
     def __init__(self, source):
         self.source = source
         self.is_hls = False
         self.cap = None
         self.hls_reader = None
+        self.ffmpeg_reader = None
         self.frame_w = 800
         self.frame_h = 480
         self.fps = 25.0
@@ -726,6 +802,24 @@ class SmartVideoSource:
 
     def _init_source(self):
         os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "tls_verify;0|timeout;10000000"
+
+        # Prioritas 1: YouTube Live / googlevideo → gunakan FFmpegStreamReader via pipe
+        IS_YOUTUBE_OR_GOOGLEVIDEO = isinstance(self.source, str) and (
+            "googlevideo.com" in self.source
+            or "youtube.com" in self.source
+            or "youtu.be" in self.source
+            or "googlevideo" in self.source
+        )
+        if IS_YOUTUBE_OR_GOOGLEVIDEO:
+            self.is_hls = True
+            self.ffmpeg_reader = FFmpegStreamReader(self.source)
+            if self.ffmpeg_reader.isOpened():
+                self.frame_w = self.ffmpeg_reader.frame_w
+                self.frame_h = self.ffmpeg_reader.frame_h
+                self.fps = self.ffmpeg_reader.fps
+                return
+            self.ffmpeg_reader.release()
+            self.ffmpeg_reader = None
 
         if isinstance(self.source, str) and (".m3u8" in self.source or "memfs" in self.source or "googlevideo" in self.source or "/hls" in self.source):
             self.is_hls = True
@@ -756,6 +850,8 @@ class SmartVideoSource:
                 self.fps = fps_val if (fps_val and fps_val > 0 and not np.isnan(fps_val)) else 25.0
 
     def isOpened(self):
+        if self.ffmpeg_reader is not None and self.ffmpeg_reader.isOpened():
+            return True
         if self.cap is not None and self.cap.isOpened():
             return True
         if self.hls_reader is not None and self.hls_reader.isOpened():
@@ -763,6 +859,12 @@ class SmartVideoSource:
         return False
 
     def read(self):
+        # Prioritas: FFmpegStreamReader (YouTube/googlevideo)
+        if self.ffmpeg_reader is not None:
+            if self.ffmpeg_reader.isOpened():
+                return self.ffmpeg_reader.read()
+            return False, None
+
         if self.cap is not None and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret and frame is not None:
@@ -780,6 +882,9 @@ class SmartVideoSource:
         return False, None
 
     def release(self):
+        if self.ffmpeg_reader is not None:
+            self.ffmpeg_reader.release()
+            self.ffmpeg_reader = None
         if self.cap is not None:
             self.cap.release()
             self.cap = None
@@ -1944,12 +2049,12 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 st.session_state.pemisahan_arah = "50-50"
                 total_applied = 3108
             else:
-                # Terapkan hasil proyeksi per jam yang akurat
-                st.session_state.vol_sm = max(10, last_proj["proj_sm"])
-                st.session_state.vol_mp = max(10, last_proj["proj_mp"])
-                st.session_state.vol_ks = max(5, last_proj["proj_ks"])
-                st.session_state.vol_bb = max(2, last_proj["proj_bb"])
-                st.session_state.vol_tb = max(2, last_proj["proj_tb"])
+                # Terapkan hasil proyeksi per jam yang akurat (tanpa clamp min agar nilai 0 tetap terapkan)
+                st.session_state.vol_sm = int(last_proj["proj_sm"])
+                st.session_state.vol_mp = int(last_proj["proj_mp"])
+                st.session_state.vol_ks = int(last_proj["proj_ks"])
+                st.session_state.vol_bb = int(last_proj["proj_bb"])
+                st.session_state.vol_tb = int(last_proj["proj_tb"])
                 st.session_state.pemisahan_arah = rec_pa
                 total_applied = last_proj["proj_total"]
 
