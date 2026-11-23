@@ -343,6 +343,10 @@ st.markdown("""
         padding: 2px 8px;
         border-radius: 99px;
         letter-spacing: 0.5px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1513,7 +1517,7 @@ LOS {los_info['los']}
             y=[q_total],
             marker=dict(color=los_info["warna"], line=dict(color="rgba(15,23,42,0.3)", width=1)),
             text=[f"<b>{q_total:,.1f} smp/jam</b><br>({total_kendaraan:,} kend/jam)"],
-            textposition="auto",
+            textposition="outside",
             hovertemplate="<b>Arus Aktual (Q)</b>: %{y:,.1f} smp/jam<extra></extra>"
         ))
         fig_bar.add_trace(go.Bar(
@@ -1522,7 +1526,7 @@ LOS {los_info['los']}
             y=[c_kapasitas],
             marker=dict(color="#64748b", line=dict(color="rgba(15,23,42,0.3)", width=1)),
             text=[f"<b>{c_kapasitas:,.1f} smp/jam</b><br>(Kapasitas Maks)"],
-            textposition="auto",
+            textposition="outside",
             hovertemplate="<b>Kapasitas Efektif (C)</b>: %{y:,.1f} smp/jam<extra></extra>"
         ))
 
@@ -1533,24 +1537,32 @@ LOS {los_info['los']}
             line=dict(color="#dc2626", width=2, dash="dashdot"),
         )
         fig_bar.add_annotation(
-            x=0.5, y=ambang_kritis,
-            text=f"Ambang Kritis Batas Jenuh DS = 0.85 ({ambang_kritis:,.0f} smp/jam)",
-            showarrow=True, arrowhead=2, arrowcolor="#dc2626",
-            ax=0, ay=-25,
+            x=0.01, xref="paper", xanchor="left",
+            y=ambang_kritis,
+            text=f"Batas Kritis DS = 0.85 ({ambang_kritis:,.0f} smp/jam)",
+            showarrow=False,
             bgcolor="rgba(254,226,226,0.9)", bordercolor="#dc2626", borderwidth=1, borderpad=4,
-            font=dict(size=11, color="#991b1b", family="Plus Jakarta Sans", weight="bold")
+            font=dict(size=11, color="#991b1b", family="Plus Jakarta Sans, sans-serif")
         )
 
-        y_max = max(q_total, c_kapasitas) * 1.25 if max(q_total, c_kapasitas) > 0 else 1000
+        y_max = max(q_total, c_kapasitas, 100.0) * 1.32
         fig_bar.update_layout(
             height=360,
-            margin=dict(l=40, r=40, t=20, b=40),
+            margin=dict(l=40, r=40, t=30, b=40),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
-            font=dict(family="Plus Jakarta Sans"),
-            xaxis=dict(tickfont=dict(size=12, weight="bold")),
-            yaxis=dict(title="Volume (smp / jam)", range=[0, y_max], gridcolor="rgba(148,163,184,0.18)")
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
+            xaxis=dict(
+                tickfont=dict(size=12, color="#94a3b8"),
+                gridcolor="rgba(148, 163, 184, 0.18)"
+            ),
+            yaxis=dict(
+                title=dict(text="Volume (smp / jam)", font=dict(color="#94a3b8", size=12)),
+                range=[0, y_max],
+                tickfont=dict(color="#94a3b8"),
+                gridcolor="rgba(148, 163, 184, 0.18)"
+            )
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -1592,8 +1604,8 @@ LOS {los_info['los']}
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
-            font=dict(family="Plus Jakarta Sans"),
-            annotations=[dict(text=f"<b>Total</b><br>{total_kendaraan:,}<br><span style='font-size:10px;'>kend/jam</span>", x=0.5, y=0.5, font_size=12, showarrow=False)]
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
+            annotations=[dict(text=f"<b>Total</b><br>{total_kendaraan:,}<br><span style='font-size:10px;'>kend/jam</span>", x=0.5, y=0.5, font_size=12, font=dict(color="#94a3b8"), showarrow=False)]
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
@@ -2780,12 +2792,28 @@ Gunakan modul interaktif ini saat presentasi/evaluasi langsung untuk menguji aku
         ))
         fig_val.update_layout(
             barmode="group",
-            height=240,
-            margin=dict(l=10, r=10, t=25, b=10),
+            height=260,
+            margin=dict(l=20, r=20, t=30, b=20),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            font=dict(family="Plus Jakarta Sans", color="inherit")
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                font=dict(color="#94a3b8", size=11)
+            ),
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
+            xaxis=dict(
+                tickfont=dict(color="#94a3b8", size=12),
+                gridcolor="rgba(148, 163, 184, 0.18)"
+            ),
+            yaxis=dict(
+                title=dict(text="Volume (kendaraan)", font=dict(color="#94a3b8", size=12)),
+                tickfont=dict(color="#94a3b8"),
+                gridcolor="rgba(148, 163, 184, 0.18)"
+            )
         )
         st.plotly_chart(fig_val, use_container_width=True)
 
