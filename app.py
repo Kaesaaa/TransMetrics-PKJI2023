@@ -412,10 +412,12 @@ def normalize_youtube_url(url: str) -> str:
     return url
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def extract_stream_ytdlp(url: str):
     """
     Lapis 2: Ekstraksi stream video dari YouTube Live atau portal video via yt-dlp.
-    Mengembalikan: (stream_url, title, error_message)
+    Mengembalikan: (stream_url, title, error_message).
+    Dioptimalkan dengan fast Android client dan cache 10 menit.
     """
     if yt_dlp is None:
         return None, None, "Library yt-dlp belum terpasang."
@@ -426,8 +428,11 @@ def extract_stream_ytdlp(url: str):
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
-        'socket_timeout': 10,
+        'noplaylist': True,
+        'playlist_items': '1',
+        'skip_download': True,
+        'socket_timeout': 5,
+        'extractor_args': {'youtube': {'player_client': ['android']}},
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -437,7 +442,7 @@ def extract_stream_ytdlp(url: str):
             title = info.get('title', 'YouTube Live Stream')
             stream_url = info.get('url')
 
-            # Jika stream_url kosong/None, cari di formats (resolusi <= 720p dengan vcodec dan protocol m3u8)
+            # Jika stream_url kosong/None, cari di formats
             if not stream_url:
                 formats = info.get('formats', [])
                 valid_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('url')]
@@ -451,6 +456,27 @@ def extract_stream_ytdlp(url: str):
                 return stream_url, title, None
             return None, title, "Tidak ditemukan format video yang dapat diputar."
     except Exception as e:
+        # Fallback cepat dengan player client default jika android gagal
+        try:
+            ydl_opts_fb = dict(ydl_opts)
+            ydl_opts_fb.pop('extractor_args', None)
+            with yt_dlp.YoutubeDL(ydl_opts_fb) as ydl:
+                info = ydl.extract_info(clean_url, download=False)
+                if info:
+                    title = info.get('title', 'YouTube Live Stream')
+                    stream_url = info.get('url')
+                    if not stream_url:
+                        formats = info.get('formats', [])
+                        valid_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('url')]
+                        m3u8_formats = [f for f in valid_formats if 'm3u8' in str(f.get('protocol', '')) or '.m3u8' in str(f.get('url', ''))]
+                        if m3u8_formats:
+                            stream_url = m3u8_formats[-1]['url']
+                        elif valid_formats:
+                            stream_url = valid_formats[-1]['url']
+                    if stream_url:
+                        return stream_url, title, None
+        except Exception:
+            pass
         return None, None, str(e)
 
 
@@ -619,34 +645,34 @@ class FFmpegStreamReader:
         self.proc = None
         self.frame_w = self.FRAME_W
         self.frame_h = self.FRAME_H
-        self.fps = 6.0  # -vf fps=6 membatasi output 6 frame/detik untuk hemat CPU Cloud
+        self.fps = 8.0  # Output 8 FPS: real-time, mulus, dan sangat hemat CPU Cloud
         self._open()
 
     def _open(self):
         cmd = [
             "ffmpeg",
             "-hide_banner", "-loglevel", "error",
-            # Low-latency flags: tampilkan frame dalam 1-2 detik, hindari buffering cloud
+            # Low-latency flags: tampilkan frame instan, hindari buffering cloud
             "-fflags", "nobuffer",
             "-flags", "low_delay",
-            "-probesize", "32768",
+            "-probesize", "500000",
             "-analyzeduration", "500000",
-            "-live_start_index", "-1",
             "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2",
             "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "-i", self.url,
             # -an: matikan audio → hemat bandwidth & CPU di Streamlit Cloud
             "-an",
-            # fps=6: kirim hanya 6 fps ke Python, cukup untuk YOLO11, tanpa lag antrean pipa
-            "-vf", f"fps=6,scale={self.FRAME_W}:{self.FRAME_H}:force_original_aspect_ratio=decrease,pad={self.FRAME_W}:{self.FRAME_H}:(ow-iw)/2:(oh-ih)/2",
+            # fps=8: batasi ke 8 fps stabil langsung di level decoder FFmpeg
+            "-vf", f"fps=8,scale={self.FRAME_W}:{self.FRAME_H}:force_original_aspect_ratio=decrease,pad={self.FRAME_W}:{self.FRAME_H}:(ow-iw)/2:(oh-ih)/2",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1"
         ]
         try:
+            # bufsize minimal (2 frame) agar tidak menumpuk antrean frame kadaluarsa di pipa
             self.proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                bufsize=10 ** 8
+                bufsize=self.FRAME_BYTES * 2
             )
         except Exception:
             self.proc = None
@@ -824,7 +850,12 @@ class SmartVideoSource:
         )
         if IS_YOUTUBE_OR_GOOGLEVIDEO:
             self.is_hls = True
-            self.ffmpeg_reader = FFmpegStreamReader(self.source)
+            actual_url = self.source
+            if "youtube.com" in actual_url or "youtu.be" in actual_url:
+                s_url, _, _ = extract_stream_ytdlp(actual_url)
+                if s_url:
+                    actual_url = s_url
+            self.ffmpeg_reader = FFmpegStreamReader(actual_url)
             if self.ffmpeg_reader.isOpened():
                 self.frame_w = self.ffmpeg_reader.frame_w
                 self.frame_h = self.ffmpeg_reader.frame_h
@@ -1731,7 +1762,12 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 )
 
             # Resolusi otomatis URL CCTV (Universal 4-Layer Extractor)
-            res_url, cam_title, discovered_chs, msg, is_extracted = resolve_cctv_url(input_stream)
+            is_yt_input = any(p in str(input_stream).lower() for p in ["youtube.com", "youtu.be"])
+            if is_yt_input:
+                with st.spinner("Mengekstrak siaran langsung YouTube Live (Fast Mode)..."):
+                    res_url, cam_title, discovered_chs, msg, is_extracted = resolve_cctv_url(input_stream)
+            else:
+                res_url, cam_title, discovered_chs, msg, is_extracted = resolve_cctv_url(input_stream)
             video_path_to_open = res_url
 
             # Jika ditemukan channel baru dari halaman web, sinkronkan ke daftar
@@ -2146,8 +2182,11 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 else:
                     detection_frame = frame
 
-                # Cloud CPU-Saver: skip-frame — jalankan YOLO setiap 2 frame
-                if frame_idx % 2 == 0:
+                is_live = getattr(cap, "is_hls", False) or getattr(cap, "ffmpeg_reader", None) is not None
+
+                # Pada live stream (8 FPS), jalankan YOLO setiap frame agar tracking akurat & tanpa lag
+                # Pada video file lokal (25-30 FPS), skip-frame setiap 2 frame untuk hemat CPU
+                if is_live or (frame_idx % 2 == 0):
                     results = model.track(
                         detection_frame,
                         persist=True,
@@ -2303,8 +2342,11 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 hud_text = f"MODEL: {active_model_file.upper()} | {clahe_status} | FPS: {fps:.1f} | TRACKS: {len(results[0].boxes)} | TOTAL: {sum(current_counts.values())}"
                 cv2.putText(annotated_frame, hud_text, (15, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (56, 189, 248), 2)
 
-                # Render video Base64 JPEG dan UI setiap 2 frame (atau frame 1) untuk stabilitas Cloud
-                if frame_idx % 2 == 0 or frame_idx == 1:
+                # Render video Base64 JPEG dan UI
+                # Live stream (8 FPS) dirender setiap frame untuk real-time smooth display tanpa lag antrean
+                # Video file lokal (25-30 FPS) dirender setiap 2 frame
+                should_render = is_live or (frame_idx % 2 == 0) or (frame_idx == 1)
+                if should_render:
                     _, buf = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
                     b64_img = base64.b64encode(buf).decode("utf-8")
                     video_placeholder.markdown(
@@ -2330,8 +2372,10 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                     r_pa, p1, p2 = hitung_rekomendasi_pa(dir_counts["Arah 1"], dir_counts["Arah 2"])
                     render_dir_metric(dir_metric_placeholder, dir_counts["Arah 1"], dir_counts["Arah 2"], p1, p2, r_pa)
 
-                    # Cloud Video Stabilization: jeda 80ms untuk frame rate stabil 6-10 FPS
-                    time.sleep(0.08)
+                    # Jeda hanya untuk video lokal berkecepatan tinggi agar tidak membebani CPU,
+                    # JANGAN beri jeda pada live stream karena FFmpeg sudah membatasi ke 8 FPS!
+                    if not is_live:
+                        time.sleep(0.05)
 
                 # Simpan ke session state berkala
                 st.session_state.cctv_counts = current_counts
