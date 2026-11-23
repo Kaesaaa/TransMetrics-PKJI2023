@@ -422,7 +422,7 @@ def extract_stream_ytdlp(url: str):
 
     clean_url = normalize_youtube_url(url)
     ydl_opts = {
-        'format': 'best[height<=720][ext=mp4]/best[height<=720]/best',
+        'format': 'best[height<=480][protocol^=m3u8]/best[height<=480]/best[height<=720]/best',
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
@@ -454,10 +454,12 @@ def extract_stream_ytdlp(url: str):
         return None, None, str(e)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def resolve_cctv_url(raw_input: str):
     """
     Mengekstrak dan mengubah input URL CCTV dari kota mana pun di Indonesia
     menjadi direct stream video/HLS (.m3u8/.mp4) dengan 4 Lapis Ekstraksi Universal.
+    Cache TTL 300 detik agar yt-dlp tidak dijalankan ulang setiap render.
 
     Returns:
         resolved_stream_url: str atau int (device webcam)
@@ -617,16 +619,26 @@ class FFmpegStreamReader:
         self.proc = None
         self.frame_w = self.FRAME_W
         self.frame_h = self.FRAME_H
-        self.fps = 25.0
+        self.fps = 6.0  # -vf fps=6 membatasi output 6 frame/detik untuk hemat CPU Cloud
         self._open()
 
     def _open(self):
         cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "ffmpeg",
+            "-hide_banner", "-loglevel", "error",
+            # Low-latency flags: tampilkan frame dalam 1-2 detik, hindari buffering cloud
+            "-fflags", "nobuffer",
+            "-flags", "low_delay",
+            "-probesize", "32768",
+            "-analyzeduration", "500000",
+            "-live_start_index", "-1",
             "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2",
-            "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "-i", self.url,
-            "-vf", f"scale={self.FRAME_W}:{self.FRAME_H}:force_original_aspect_ratio=decrease,pad={self.FRAME_W}:{self.FRAME_H}:(ow-iw)/2:(oh-ih)/2",
+            # -an: matikan audio → hemat bandwidth & CPU di Streamlit Cloud
+            "-an",
+            # fps=6: kirim hanya 6 fps ke Python, cukup untuk YOLO11, tanpa lag antrean pipa
+            "-vf", f"fps=6,scale={self.FRAME_W}:{self.FRAME_H}:force_original_aspect_ratio=decrease,pad={self.FRAME_W}:{self.FRAME_H}:(ow-iw)/2:(oh-ih)/2",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1"
         ]
         try:
@@ -2075,7 +2087,8 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
             model = load_yolo_model(active_model_file)
 
         # Buka Video menggunakan SmartVideoSource (Mendukung File, Webcam, HLS & Fallback TS)
-        cap = SmartVideoSource(video_path_to_open)
+        with st.spinner("Menghubungkan ke aliran video (Fast Mode 480p)..."):
+            cap = SmartVideoSource(video_path_to_open)
         if not cap.isOpened():
             st.error(f"Gagal membuka sumber video: {video_path_to_open}. Silakan periksa koneksi internet atau format URL.")
             st.session_state.tracking_active = False
