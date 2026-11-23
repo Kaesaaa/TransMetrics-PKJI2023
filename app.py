@@ -21,6 +21,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import time
+import base64
 import sys
 import subprocess
 import tempfile
@@ -74,6 +75,17 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
 
+    /* Adaptif Tema Bawaan Streamlit: Root & Global */
+    .stApp {
+        background-color: var(--background-color);
+        color: var(--text-color);
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: var(--secondary-background-color) !important;
+        border-right: 1px solid rgba(128, 128, 128, 0.25);
+    }
+
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 2.5rem;
@@ -81,12 +93,12 @@ st.markdown("""
         padding-right: 2rem;
     }
 
-    /* Top Brand Banner */
-    .brand-header {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%);
+    /* Top Brand Banner / Hero Banner (Tetap Biru Kontras Tinggi di Dark/Light) */
+    .brand-header, .hero-banner {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%) !important;
         border-radius: 16px;
         padding: 24px 28px;
-        color: #ffffff;
+        color: #ffffff !important;
         box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.4), 0 8px 10px -6px rgba(15, 23, 42, 0.2);
         margin-bottom: 24px;
         border-left: 6px solid #0284c7;
@@ -94,7 +106,7 @@ st.markdown("""
         overflow: hidden;
     }
     
-    .brand-header::after {
+    .brand-header::after, .hero-banner::after {
         content: "";
         position: absolute;
         top: -40px;
@@ -105,20 +117,20 @@ st.markdown("""
         border-radius: 50%;
     }
 
-    .brand-title {
+    .brand-title, .hero-banner h1, .hero-banner h2 {
         font-size: 26px;
         font-weight: 800;
         letter-spacing: -0.5px;
         margin: 0;
-        color: #f8fafc;
+        color: #ffffff !important;
         display: flex;
         align-items: center;
         gap: 12px;
     }
 
-    .brand-subtitle {
+    .brand-subtitle, .hero-banner p {
         font-size: 13.5px;
-        color: #94a3b8;
+        color: #e2e8f0 !important;
         margin-top: 6px;
         font-weight: 400;
         line-height: 1.5;
@@ -137,13 +149,13 @@ st.markdown("""
         border-radius: 9999px;
         font-size: 11px;
         font-weight: 600;
-        background: rgba(255, 255, 255, 0.12);
-        color: #e2e8f0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.3);
         backdrop-filter: blur(4px);
     }
 
-    /* KPI Metric Cards */
+    /* KPI Metric Cards, Section Cards, & Content Boxes */
     .kpi-container {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -163,9 +175,10 @@ st.markdown("""
         }
     }
 
-    .kpi-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+    .kpi-card, .section-card, .info-card, .roadmap-card, .content-box {
+        background: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.25) !important;
         border-radius: 14px;
         padding: 18px 20px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
@@ -173,9 +186,9 @@ st.markdown("""
         position: relative;
     }
 
-    .kpi-card:hover {
+    .kpi-card:hover, .roadmap-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 
     .kpi-label {
@@ -183,7 +196,8 @@ st.markdown("""
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #64748b;
+        color: var(--text-color) !important;
+        opacity: 0.75;
         margin-bottom: 6px;
         display: flex;
         justify-content: space-between;
@@ -193,7 +207,7 @@ st.markdown("""
     .kpi-value {
         font-size: 28px;
         font-weight: 800;
-        color: #0f172a;
+        color: var(--text-color) !important;
         line-height: 1.1;
         font-family: 'JetBrains Mono', monospace;
     }
@@ -201,13 +215,15 @@ st.markdown("""
     .kpi-unit {
         font-size: 13px;
         font-weight: 500;
-        color: #64748b;
+        color: var(--text-color) !important;
+        opacity: 0.75;
         margin-left: 4px;
     }
 
     .kpi-subtext {
         font-size: 11.5px;
-        color: #94a3b8;
+        color: var(--text-color) !important;
+        opacity: 0.75;
         margin-top: 8px;
         font-weight: 500;
     }
@@ -222,7 +238,7 @@ st.markdown("""
         font-weight: 800;
         font-size: 20px;
         letter-spacing: 0.5px;
-        color: #ffffff;
+        color: #ffffff !important;
         width: 100%;
         text-align: center;
         box-shadow: 0 2px 4px rgba(0,0,0,0.15);
@@ -235,34 +251,25 @@ st.markdown("""
         margin-top: 6px;
     }
 
-    /* Content Cards */
-    .content-box {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 22px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
-    }
-
     .content-box-title {
         font-size: 16px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text-color) !important;
         margin-bottom: 16px;
         display: flex;
         align-items: center;
         gap: 8px;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.25) !important;
         padding-bottom: 10px;
     }
 
-    /* Streamlit Tabs */
+    /* Streamlit Tabs - Adaptif Dark/Light */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #f1f5f9;
+        background-color: var(--secondary-background-color) !important;
         padding: 6px;
         border-radius: 12px;
+        border: 1px solid rgba(128, 128, 128, 0.25);
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -271,46 +278,29 @@ st.markdown("""
         border-radius: 8px;
         font-weight: 600;
         font-size: 14px;
-        color: #475569;
+        color: var(--text-color) !important;
+        opacity: 0.75;
         padding: 0 20px;
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #ffffff !important;
+        background-color: var(--background-color) !important;
         color: #0284c7 !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08) !important;
+        opacity: 1 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
     }
 
     .info-callout {
-        background: #f0f9ff;
+        background: rgba(2, 132, 199, 0.12);
         border-left: 4px solid #0284c7;
         padding: 12px 16px;
         border-radius: 0 8px 8px 0;
         font-size: 13px;
-        color: #0369a1;
+        color: var(--text-color) !important;
         margin-bottom: 14px;
-    }
-
-    /* Dark Mode Compatibility */
-    @media (prefers-color-scheme: dark) {
-        .kpi-card, .content-box {
-            background: #1e293b;
-            border-color: #334155;
-        }
-        .kpi-value {
-            color: #f8fafc;
-        }
-        .content-box-title {
-            color: #f8fafc;
-            border-bottom-color: #334155;
-        }
-        .stTabs [data-baseweb="tab-list"] {
-            background-color: #1e293b;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: #0f172a !important;
-            color: #38bdf8 !important;
-        }
+        border-top: 1px solid rgba(128, 128, 128, 0.2);
+        border-right: 1px solid rgba(128, 128, 128, 0.2);
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -352,6 +342,8 @@ if "tracking_active" not in st.session_state:
     st.session_state.tracking_active = False
 if "last_annotated_frame" not in st.session_state:
     st.session_state.last_annotated_frame = None
+if "last_annotated_jpeg" not in st.session_state:
+    st.session_state.last_annotated_jpeg = None
 
 # -------------------------------------------------------------------------------------------------
 # 4. PRESET LIVE CCTV KOTA MAGELANG, SMART WEB EXTRACTOR, & HLS STREAM ENGINE
@@ -1045,11 +1037,11 @@ st.markdown("""
 # 7. SIDEBAR: PARAMETER GEOMETRIK & KONDISI LINGKUNGAN
 # -------------------------------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("""<div style="padding-bottom:12px; border-bottom:2px solid #e2e8f0; margin-bottom:16px;">
-<h3 style="margin:0; font-size:18px; color:#0f172a; font-weight:800; display:flex; align-items:center; gap:8px;">
+    st.markdown("""<div style="padding-bottom:12px; border-bottom:2px solid rgba(128,128,128,0.25); margin-bottom:16px;">
+<h3 style="margin:0; font-size:18px; color:var(--text-color); font-weight:800; display:flex; align-items:center; gap:8px;">
 <span>⚙️</span> Parameter Geometrik
 </h3>
-<p style="margin:4px 0 0 0; font-size:12px; color:#64748b;">
+<p style="margin:4px 0 0 0; font-size:12px; color:var(--text-color); opacity:0.75;">
 Karakteristik Fisik & Lingkungan Ruas Jalan
 </p>
 </div>""", unsafe_allow_html=True)
@@ -1127,7 +1119,7 @@ Karakteristik Fisik & Lingkungan Ruas Jalan
         st.session_state.pemisahan_arah = pemisahan_arah
 
     st.markdown("---")
-    st.markdown("<p style='font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;'>⚡ Preset Skenario Cepat:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:12px; font-weight:700; color:var(--text-color); opacity:0.85; margin-bottom:6px;'>⚡ Preset Skenario Cepat:</p>", unsafe_allow_html=True)
     c_p1, c_p2 = st.columns(2)
     with c_p1:
         if st.button("🏙️ Arteri Kota", use_container_width=True):
@@ -1352,8 +1344,9 @@ LOS {los_info['los']}
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
+            font=dict(family="Plus Jakarta Sans"),
             xaxis=dict(tickfont=dict(size=13, weight="bold")),
-            yaxis=dict(title="Volume (smp / jam)", range=[0, y_max], gridcolor="#e2e8f0")
+            yaxis=dict(title="Volume (smp / jam)", range=[0, y_max], gridcolor="rgba(128,128,128,0.2)")
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -1399,7 +1392,7 @@ LOS {los_info['los']}
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
-        st.markdown(f"""<div style="font-size:12px; color:#475569; background:#f8fafc; padding:8px 12px; border-radius:6px; border:1px solid #e2e8f0;">
+        st.markdown(f"""<div style="font-size:12px; color:var(--text-color); background:var(--secondary-background-color); padding:8px 12px; border-radius:6px; border:1px solid rgba(128,128,128,0.25);">
 🏍️ Proporsi SM: <strong>{((in_sm/total_kendaraan*100) if total_kendaraan>0 else 0):.1f}%</strong> | 🚗 Proporsi MP: <strong>{((in_mp/total_kendaraan*100) if total_kendaraan>0 else 0):.1f}%</strong>
 </div>""", unsafe_allow_html=True)
 
@@ -1439,7 +1432,7 @@ LOS {los_info['los']}
             ]
         })
         st.dataframe(df_faktor, use_container_width=True, hide_index=True)
-        st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:#f1f5f9; padding:10px 12px; border-radius:8px; margin-top:8px; border:1px solid #cbd5e1;">
+        st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:var(--secondary-background-color); color:var(--text-color); padding:10px 12px; border-radius:8px; margin-top:8px; border:1px solid rgba(128,128,128,0.25);">
 <strong>Kapasitas C = C₀ × FC_LJ × FC_PA × FC_HS × FC_UK = {c_kapasitas:,.1f} smp/jam</strong>
 </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1457,7 +1450,7 @@ LOS {los_info['los']}
             "Arus (smp/jam)": [f"{q_sm:,.1f}", f"{q_mp:,.1f}", f"{q_ks:,.1f}", f"{q_bb:,.1f}", f"{q_tb:,.1f}", f"{q_total:,.1f}"]
         })
         st.dataframe(df_volume, use_container_width=True, hide_index=True)
-        st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:#f1f5f9; padding:10px 12px; border-radius:8px; margin-top:8px; border:1px solid #cbd5e1;">
+        st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:var(--secondary-background-color); color:var(--text-color); padding:10px 12px; border-radius:8px; margin-top:8px; border:1px solid rgba(128,128,128,0.25);">
 <strong>Derajat Kejenuhan DS = Q / C = {ds:.3f} <span style="color:{los_info['warna']};">({los_info['status']})</span></strong>
 </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1726,6 +1719,7 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
         st.session_state.cctv_elapsed_sec = 0.0
         st.session_state.cctv_frame_count = 0
         st.session_state.last_annotated_frame = None
+        st.session_state.last_annotated_jpeg = None
         st.session_state.tracking_active = False
         st.toast("Counter kendaraan dan histori video berhasil di-reset!", icon="🔄")
         st.rerun()
@@ -1737,7 +1731,7 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 
     # 3. METODE KONVERSI ARUS PER JAM (Q)
     st.markdown("""<div class="content-box" style="padding:16px 20px; margin-bottom:18px;">
-<div style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:8px;">
+<div style="font-size:14px; font-weight:700; color:var(--text-color); margin-bottom:8px;">
 ⏱️ Metode Konversi Arus Per Jam (Q) Berdasarkan Durasi Video
 </div>""", unsafe_allow_html=True)
     conv_method = st.radio(
@@ -1789,49 +1783,49 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
         proj_tb = int(round(tb * multiplier))
         proj_total = int(round(total_counted * multiplier))
 
-        html_table = f"""<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:18px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #cbd5e1; padding-bottom:8px; margin-bottom:12px;">
-<span style="font-size:14.5px; font-weight:800; color:#0f172a;">📊 Hasil Pencacahan Otomatis AI (Live)</span>
+        html_table = f"""<div style="background:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.25); border-radius:12px; padding:18px; box-shadow:0 2px 4px rgba(0,0,0,0.04); color:var(--text-color);">
+<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(128,128,128,0.25); padding-bottom:8px; margin-bottom:12px;">
+<span style="font-size:14.5px; font-weight:800; color:var(--text-color);">📊 Hasil Pencacahan Otomatis AI (Live)</span>
 <span style="font-size:11px; background:#dcfce7; color:#15803d; font-weight:700; padding:3px 8px; border-radius:99px;">ByteTrack Active</span>
 </div>
-<table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:12px;">
-<tr style="border-bottom:2px solid #e2e8f0; color:#64748b;">
+<table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:12px; color:var(--text-color);">
+<tr style="border-bottom:2px solid rgba(128,128,128,0.25); color:var(--text-color); opacity:0.8;">
 <th style="text-align:left; padding:6px 0;">Klasifikasi PKJI 2023</th>
 <th style="text-align:right; padding:6px 0;">Hitungan Riil</th>
 <th style="text-align:right; padding:6px 0;">Proyeksi / Jam</th>
 </tr>
-<tr style="border-bottom:1px solid #f1f5f9;">
+<tr style="border-bottom:1px solid rgba(128,128,128,0.15);">
 <td style="padding:6px 0; font-weight:600; color:#0284c7;">🛵 Sepeda Motor (SM)</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px;">{sm}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px; color:var(--text-color);">{sm}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; color:#0284c7; font-weight:700;">{proj_sm:,}</td>
 </tr>
-<tr style="border-bottom:1px solid #f1f5f9;">
+<tr style="border-bottom:1px solid rgba(128,128,128,0.15);">
 <td style="padding:6px 0; font-weight:600; color:#16a34a;">🚙 Mobil Penumpang (MP)</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px;">{mp}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px; color:var(--text-color);">{mp}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; color:#16a34a; font-weight:700;">{proj_mp:,}</td>
 </tr>
-<tr style="border-bottom:1px solid #f1f5f9;">
+<tr style="border-bottom:1px solid rgba(128,128,128,0.15);">
 <td style="padding:6px 0; font-weight:600; color:#0d9488;">🚐 Kendaraan Sedang (KS)</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px;">{ks}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px; color:var(--text-color);">{ks}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; color:#0d9488; font-weight:700;">{proj_ks:,}</td>
 </tr>
-<tr style="border-bottom:1px solid #f1f5f9;">
+<tr style="border-bottom:1px solid rgba(128,128,128,0.15);">
 <td style="padding:6px 0; font-weight:600; color:#d97706;">🚌 Bus Besar (BB)</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px;">{bb}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px; color:var(--text-color);">{bb}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; color:#d97706; font-weight:700;">{proj_bb:,}</td>
 </tr>
-<tr style="border-bottom:2px solid #e2e8f0;">
+<tr style="border-bottom:2px solid rgba(128,128,128,0.25);">
 <td style="padding:6px 0; font-weight:600; color:#dc2626;">🚛 Truk Berat (TB)</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px;">{tb}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-weight:700; font-size:14px; color:var(--text-color);">{tb}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; color:#dc2626; font-weight:700;">{proj_tb:,}</td>
 </tr>
-<tr style="font-weight:800; color:#0f172a; font-size:13.5px;">
+<tr style="font-weight:800; color:var(--text-color); font-size:13.5px;">
 <td style="padding:8px 0;">TOTAL VOLUME</td>
-<td style="text-align:right; font-family:'JetBrains Mono'; font-size:15px; color:#0f172a;">{total_counted}</td>
+<td style="text-align:right; font-family:'JetBrains Mono'; font-size:15px; color:var(--text-color);">{total_counted}</td>
 <td style="text-align:right; font-family:'JetBrains Mono'; font-size:15px; color:#0284c7;">{proj_total:,}</td>
 </tr>
 </table>
-<div style="font-size:11.5px; color:#64748b; line-height:1.4;">
+<div style="font-size:11.5px; color:var(--text-color); opacity:0.75; line-height:1.4;">
 ℹ️ <strong>Dasar Konversi:</strong> {subtext_method}
 </div>
 </div>"""
@@ -1856,11 +1850,11 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
     rec_pa, p_dir1, p_dir2 = hitung_rekomendasi_pa(dir_c1, dir_c2)
 
     def render_dir_metric(placeholder, c1, c2, p1, p2, pa_rec):
-        html_dir = f"""<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; padding:12px 14px; margin-top:10px;">
-<div style="font-size:11.5px; font-weight:700; color:#475569; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">
+        html_dir = f"""<div style="background:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.25); border-radius:10px; padding:12px 14px; margin-top:10px; color:var(--text-color);">
+<div style="font-size:11.5px; font-weight:700; color:var(--text-color); opacity:0.75; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">
 🧭 Pemisahan Arah Otomatis (Directional Split / PA)
 </div>
-<div style="font-size:13.5px; font-weight:800; color:#0f172a; margin-bottom:4px;">
+<div style="font-size:13.5px; font-weight:800; color:var(--text-color); margin-bottom:4px;">
 ⬇️ Arah 1: {c1} kend ({p1:.1f}%) &nbsp;|&nbsp; ⬆️ Arah 2: {c2} kend ({p2:.1f}%)
 </div>
 <div style="font-size:12px; color:#0284c7; font-weight:600;">
@@ -1873,11 +1867,26 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 
     # TAMPILAN STANDBY / PREVIEW FRAME (AGAR TIDAK KOSONG PUTIH)
     if not st.session_state.tracking_active:
-        if st.session_state.last_annotated_frame is not None:
-            # Tampilkan frame terakhir yang telah diproses
-            video_placeholder.image(st.session_state.last_annotated_frame, channels="RGB", use_container_width=True)
-            info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:#0f172a; color:#38bdf8; padding:8px 12px; border-radius:6px; margin-top:6px;">
-● FRAME CAPTURE TERAKHIR | Terproses: {st.session_state.cctv_frame_count} Frame ({st.session_state.cctv_elapsed_sec:.1f}s) | Status: Tersimpan & Standby
+        if st.session_state.get("last_annotated_jpeg") is not None:
+            # Tampilkan frame terakhir dengan Base64 JPEG (Anti-Freeze Cloud)
+            b64_last = base64.b64encode(st.session_state["last_annotated_jpeg"]).decode("utf-8")
+            video_placeholder.markdown(
+                f'<img src="data:image/jpeg;base64,{b64_last}" style="width:100%; border-radius:12px; display:block;" />',
+                unsafe_allow_html=True
+            )
+            info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:var(--secondary-background-color); color:var(--text-color); padding:8px 12px; border-radius:6px; margin-top:6px; border:1px solid rgba(128,128,128,0.25);">
+● FRAME CAPTURE TERAKHIR | Terproses: {st.session_state.get('cctv_frame_count', 0)} Frame ({st.session_state.get('cctv_elapsed_sec', 0.0):.1f}s) | Status: Tersimpan & Standby
+</div>""", unsafe_allow_html=True)
+        elif st.session_state.get("last_annotated_frame") is not None:
+            ret_enc, buf_prev = cv2.imencode('.jpg', cv2.cvtColor(st.session_state.last_annotated_frame, cv2.COLOR_RGB2BGR), [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if ret_enc:
+                b64_prev = base64.b64encode(buf_prev.tobytes()).decode("utf-8")
+                video_placeholder.markdown(
+                    f'<img src="data:image/jpeg;base64,{b64_prev}" style="width:100%; border-radius:12px; display:block;" />',
+                    unsafe_allow_html=True
+                )
+                info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:var(--secondary-background-color); color:var(--text-color); padding:8px 12px; border-radius:6px; margin-top:6px; border:1px solid rgba(128,128,128,0.25);">
+● FRAME CAPTURE TERAKHIR | Status: Tersimpan & Standby
 </div>""", unsafe_allow_html=True)
         else:
             # Standby: tampilkan placeholder ringan (0% CPU) — tidak membuka video
@@ -1893,12 +1902,20 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 <span style="background:#7c2d12;color:#fb923c;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;">Virtual Counting Line</span>
 </div>
 </div>""", unsafe_allow_html=True)
-            info_placeholder.markdown("""<div style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#0f172a;color:#94a3b8;padding:8px 12px;border-radius:6px;margin-top:6px;">
+            info_placeholder.markdown("""<div style="font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--secondary-background-color);color:var(--text-color);padding:8px 12px;border-radius:6px;margin-top:6px;border:1px solid rgba(128,128,128,0.25);">
 ● STANDBY | Model belum dimuat | Klik 'Mulai Deteksi' untuk memproses video
 </div>""", unsafe_allow_html=True)
 
     # TOMBOL UNDUH BUKTI CAPTURE SURVEI CCTV
-    if st.session_state.last_annotated_frame is not None:
+    if st.session_state.get("last_annotated_jpeg") is not None:
+        download_btn_placeholder.download_button(
+            label="📸 Unduh Bukti Capture Deteksi AI (.jpg)",
+            data=st.session_state["last_annotated_jpeg"],
+            file_name=f"BUKTI_SURVEI_CCTV_YOLO11_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
+            mime="image/jpeg",
+            use_container_width=True
+        )
+    elif st.session_state.get("last_annotated_frame") is not None:
         frame_bgr_dl = cv2.cvtColor(st.session_state.last_annotated_frame, cv2.COLOR_RGB2BGR)
         ret_enc, img_bytes = cv2.imencode('.jpg', frame_bgr_dl, [cv2.IMWRITE_JPEG_QUALITY, 95])
         if ret_enc:
@@ -2168,26 +2185,35 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 hud_text = f"MODEL: {active_model_file.upper()} | {clahe_status} | FPS: {fps:.1f} | TRACKS: {len(results[0].boxes)} | TOTAL: {sum(current_counts.values())}"
                 cv2.putText(annotated_frame, hud_text, (15, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (56, 189, 248), 2)
 
-                # Konversi BGR ke RGB
-                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                video_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+                # Render video Base64 JPEG dan UI setiap 2 frame (atau frame 1) untuk stabilitas Cloud
+                if frame_idx % 2 == 0 or frame_idx == 1:
+                    _, buf = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
+                    b64_img = base64.b64encode(buf).decode("utf-8")
+                    video_placeholder.markdown(
+                        f'<img src="data:image/jpeg;base64,{b64_img}" style="width:100%; border-radius:12px; display:block;" />',
+                        unsafe_allow_html=True
+                    )
+                    st.session_state["last_annotated_jpeg"] = buf.tobytes()
 
-                # Update live info & tabel di samping
-                info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:#0f172a; color:#38bdf8; padding:8px 12px; border-radius:6px; margin-top:6px;">
+                    # Update live info & tabel di samping
+                    info_placeholder.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:12px; background:var(--secondary-background-color); color:var(--text-color); padding:8px 12px; border-radius:6px; margin-top:6px; border:1px solid rgba(128,128,128,0.25);">
 ● LIVE STREAMING | Frame: {frame_idx} ({elapsed_video_sec:.1f}s) | FPS: {fps:.1f} | Resolusi: {frame_w}x{frame_h} | Model: {active_model_file}
 </div>""", unsafe_allow_html=True)
 
-                last_proj = render_live_table(
-                    current_counts,
-                    table_placeholder,
-                    elapsed_sec=elapsed_video_sec,
-                    frame_count=frame_idx,
-                    video_fps=video_fps
-                )
+                    last_proj = render_live_table(
+                        current_counts,
+                        table_placeholder,
+                        elapsed_sec=elapsed_video_sec,
+                        frame_count=frame_idx,
+                        video_fps=video_fps
+                    )
 
-                # Update live Directional Split
-                r_pa, p1, p2 = hitung_rekomendasi_pa(dir_counts["Arah 1"], dir_counts["Arah 2"])
-                render_dir_metric(dir_metric_placeholder, dir_counts["Arah 1"], dir_counts["Arah 2"], p1, p2, r_pa)
+                    # Update live Directional Split
+                    r_pa, p1, p2 = hitung_rekomendasi_pa(dir_counts["Arah 1"], dir_counts["Arah 2"])
+                    render_dir_metric(dir_metric_placeholder, dir_counts["Arah 1"], dir_counts["Arah 2"], p1, p2, r_pa)
+
+                    # Cloud Video Stabilization: jeda 80ms untuk frame rate stabil 6-10 FPS
+                    time.sleep(0.08)
 
                 # Simpan ke session state berkala
                 st.session_state.cctv_counts = current_counts
@@ -2195,10 +2221,13 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
                 st.session_state.cctv_elapsed_sec = elapsed_video_sec
                 st.session_state.cctv_frame_count = frame_idx
                 st.session_state.cctv_video_fps = video_fps
-                st.session_state.last_annotated_frame = frame_rgb
+                st.session_state.last_annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
 
-                # Cloud CPU-Saver: jeda 40ms agar server tidak throttled
-                time.sleep(0.04)
+            # Pastikan frame terakhir selalu tersimpan ke last_annotated_jpeg
+            if 'annotated_frame' in locals() and annotated_frame is not None:
+                ret_last, buf_final = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if ret_last:
+                    st.session_state["last_annotated_jpeg"] = buf_final.tobytes()
 
             cap.release()
             st.session_state.tracking_active = False
@@ -2210,56 +2239,56 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
 <div class="content-box-title">
 <span>🗺️</span> Roadmap Arsitektur AI & Computer Vision untuk Smart Traffic Dishub
 </div>
-<p style="font-size:13.5px; color:#64748b; margin-top:-8px; margin-bottom:20px;">
+<p style="font-size:13.5px; color:var(--text-color); opacity:0.75; margin-top:-8px; margin-bottom:20px;">
 Arsitektur terintegrasi end-to-end yang menjembatani streaming video CCTV mentah menjadi angka kinerja jalan (DS dan LOS) berstandar nasional PKJI 2023.
 </p>""", unsafe_allow_html=True)
 
     p1, p2, p3, p4 = st.columns(4)
     with p1:
-        st.markdown("""<div style="border:1px solid #e2e8f0; border-top:4px solid #0284c7; border-radius:10px; padding:16px; background:#ffffff; height:100%;">
+        st.markdown("""<div class="roadmap-card" style="border-top:4px solid #0284c7 !important; height:100%;">
 <div style="font-size:24px; margin-bottom:8px;">👁️</div>
-<h4 style="margin:0 0 8px 0; font-size:15px; color:#0f172a; font-weight:700;">1. YOLO11 Engine</h4>
+<h4 style="margin:0 0 8px 0; font-size:15px; color:var(--text-color); font-weight:700;">1. YOLO11 Engine</h4>
 <div style="font-size:12px; color:#0284c7; font-weight:700; margin-bottom:8px;">Deep Learning Detection</div>
-<p style="font-size:12px; color:#64748b; line-height:1.5; margin:0;">
+<p style="font-size:12px; color:var(--text-color); opacity:0.75; line-height:1.5; margin:0;">
 Generasi terbaru Ultralytics YOLO11 (yolo11n / yolo11s) dengan arsitektur C3k2 & SPPF mutakhir. Inferensi sangat cepat (&lt;35 ms pada CPU) untuk mengenali kendaraan perkotaan.
 </p>
 </div>""", unsafe_allow_html=True)
 
     with p2:
-        st.markdown("""<div style="border:1px solid #e2e8f0; border-top:4px solid #10b981; border-radius:10px; padding:16px; background:#ffffff; height:100%;">
+        st.markdown("""<div class="roadmap-card" style="border-top:4px solid #10b981 !important; height:100%;">
 <div style="font-size:24px; margin-bottom:8px;">🔄</div>
-<h4 style="margin:0 0 8px 0; font-size:15px; color:#0f172a; font-weight:700;">2. ByteTrack MOT</h4>
+<h4 style="margin:0 0 8px 0; font-size:15px; color:var(--text-color); font-weight:700;">2. ByteTrack MOT</h4>
 <div style="font-size:12px; color:#10b981; font-weight:700; margin-bottom:8px;">Multi-Object Tracking</div>
-<p style="font-size:12px; color:#64748b; line-height:1.5; margin:0;">
+<p style="font-size:12px; color:var(--text-color); opacity:0.75; line-height:1.5; margin:0;">
 Pelacak objek berbasis Kalman Filter dan Hungarian Association. Menjaga ID unik setiap kendaraan meskipun terjadi bayangan atau oklusi parsial oleh truk atau bus besar.
 </p>
 </div>""", unsafe_allow_html=True)
 
     with p3:
-        st.markdown("""<div style="border:1px solid #e2e8f0; border-top:4px solid #f59e0b; border-radius:10px; padding:16px; background:#ffffff; height:100%;">
+        st.markdown("""<div class="roadmap-card" style="border-top:4px solid #f59e0b !important; height:100%;">
 <div style="font-size:24px; margin-bottom:8px;">📏</div>
-<h4 style="margin:0 0 8px 0; font-size:15px; color:#0f172a; font-weight:700;">3. Virtual Tripwire</h4>
+<h4 style="margin:0 0 8px 0; font-size:15px; color:var(--text-color); font-weight:700;">3. Virtual Tripwire</h4>
 <div style="font-size:12px; color:#f59e0b; font-weight:700; margin-bottom:8px;">Directional Counting Line</div>
-<p style="font-size:12px; color:#64748b; line-height:1.5; margin:0;">
+<p style="font-size:12px; color:var(--text-color); opacity:0.75; line-height:1.5; margin:0;">
 Garis hitung virtual dua titik melintang ruas jalan. Mendeteksi penyeberangan garis dan arah pergerakan (Arah 1 vs Arah 2) untuk kalibrasi otomatis faktor Pemisahan Arah (PA).
 </p>
 </div>""", unsafe_allow_html=True)
 
     with p4:
-        st.markdown("""<div style="border:1px solid #e2e8f0; border-top:4px solid #8b5cf6; border-radius:10px; padding:16px; background:#ffffff; height:100%;">
+        st.markdown("""<div class="roadmap-card" style="border-top:4px solid #8b5cf6 !important; height:100%;">
 <div style="font-size:24px; margin-bottom:8px;">📈</div>
 <h4 style="margin:0 0 8px 0; font-size:15px; color:#8b5cf6; font-weight:700;">4. Agregasi PHF & Q</h4>
 <div style="font-size:12px; color:#8b5cf6; font-weight:700; margin-bottom:8px;">Arus Ekstrapolasi Jam</div>
-<p style="font-size:12px; color:#64748b; line-height:1.5; margin:0;">
+<p style="font-size:12px; color:var(--text-color); opacity:0.75; line-height:1.5; margin:0;">
 Mengonversi hitungan durasi video aktual menjadi volume arus kendaraan per jam (kend/jam) menggunakan formula ekstrapolasi waktu riil maupun interval standar 15 menit.
 </p>
 </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("""<h4 style="font-size:15px; color:#0f172a; font-weight:700; margin-bottom:12px;">
+    st.markdown("""<h4 style="font-size:15px; color:var(--text-color); font-weight:700; margin-bottom:12px;">
 🔄 Alur Pipeline Data Real-Time: Dari CCTV Menuju Keputusan Rekayasa Lalu Lintas
 </h4>
-<div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:10px; padding:18px; font-family:'JetBrains Mono', monospace; font-size:12.5px; color:#1e293b; overflow-x:auto;">
+<div style="background:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.25); border-radius:10px; padding:18px; font-family:'JetBrains Mono', monospace; font-size:12.5px; color:var(--text-color); overflow-x:auto;">
 [Kamera CCTV Dishub / Video File] 
      │
      ▼
