@@ -418,6 +418,8 @@ if "survey_applied" not in st.session_state:
     st.session_state.survey_applied = False
 if "survey_applied_label" not in st.session_state:
     st.session_state.survey_applied_label = ""
+if "processed_event_ids" not in st.session_state:
+    st.session_state.processed_event_ids = set()
 
 # -------------------------------------------------------------------------------------------------
 # 4. PRESET LIVE CCTV KOTA MAGELANG, SMART WEB EXTRACTOR, & HLS STREAM ENGINE
@@ -1464,6 +1466,949 @@ def generate_survey_excel_bytes(rows, hourly_blocks, lokasi="Jl. A. Yani - Kota 
     wb.save(buf)
     buf.seek(0)
     return buf.getvalue()
+
+
+# -------------------------------------------------------------------------------------------------
+# 5C. KOMPONEN STREAMLIT V2: ZERO-LAG CLICKABLE TRAFFIC COUNTER & TIMER
+# -------------------------------------------------------------------------------------------------
+FIELD_COUNTER_HTML = """
+<div class="field-counter-wrapper">
+  <div id="toast-container" class="toast-container"></div>
+  <div class="kpi-grid">
+    <div class="kpi-card clock-card">
+      <div class="kpi-label">
+        <span>JAM REAL-TIME (WIB)</span>
+        <svg class="kpi-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#2563EB" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div id="wib-clock-val" class="kpi-val text-blue">--:--:-- WIB</div>
+      <div id="wib-date-val" class="kpi-subtext">Memuat...</div>
+    </div>
+    <div id="timer-kpi-card" class="kpi-card timer-card">
+      <div class="kpi-label">
+        <span id="timer-kpi-label">TIMER INTERVAL (15 MNT)</span>
+        <svg id="timer-kpi-icon" class="kpi-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#64748B" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div id="timer-val" class="kpi-val text-gray">00:00 / 15:00</div>
+      <div id="timer-status-text" class="kpi-subtext">● TIMER DIJEDA / SIAGA</div>
+    </div>
+    <div id="status-kpi-card" class="kpi-card status-card">
+      <div class="kpi-label">
+        <span>STATUS INTERVAL & SIMPAN</span>
+        <svg id="status-kpi-icon" class="kpi-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#64748B" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </div>
+      <div id="status-title" class="kpi-val text-gray" style="font-size: 18px;">SIAGA (STANDBY)</div>
+      <div id="status-subtext" class="kpi-subtext">Tekan Mulai Timer Sesi</div>
+    </div>
+  </div>
+
+  <div id="alert-warning" class="alert-banner alert-warning" style="display: none;">
+    <span class="alert-icon">⚠️</span>
+    <span id="alert-warning-text">Perhatian: 15 detik menuju akhir interval! Bersiap untuk menyimpan data pencacahan.</span>
+  </div>
+
+  <div id="alert-alarm" class="alert-banner alert-alarm" style="display: none;">
+    <span class="alert-icon">🚨</span>
+    <span id="alert-alarm-text">WAKTU INTERVAL SELESAI! Klik 'Simpan & Lanjut' atau data akan TERSIMPAN OTOMATIS dalam 10 detik...</span>
+  </div>
+
+  <div class="controls-row">
+    <button id="btn-timer-toggle" class="ctrl-btn ctrl-btn-secondary" type="button">
+      <span id="btn-timer-icon">▶️</span> <span id="btn-timer-label">Mulai Timer Sesi</span>
+    </button>
+    <button id="btn-save-next" class="ctrl-btn ctrl-btn-primary" type="button">
+      <span>💾</span> <span>Simpan & Lanjut Interval</span>
+    </button>
+    <button id="btn-reset-cnt" class="ctrl-btn ctrl-btn-outline" type="button">
+      <span>🔄</span> <span>Reset Counter</span>
+    </button>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2563EB" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9L1.5 12.5C1.2 13 1 13.5 1 14.1V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2.5"/><path d="M9.5 17h5"/><circle cx="17" cy="17" r="2.5"/></svg>
+      <span>Papan Tombol Pencacahan Manual (5 Kategori PKJI 2023)</span>
+    </div>
+    <div class="section-desc">
+      Klik di mana saja pada kotak kartu untuk <strong>+1 (Instant 0ms Tap)</strong>. Gunakan tombol mini <strong>-1</strong> untuk koreksi (Undo) dan <strong>+5</strong> untuk rombongan kendaraan padat. Shortcut keyboard: tombol <strong>1-5</strong>.
+    </div>
+  </div>
+
+  <div class="cards-grid">
+    <div class="vehicle-card" data-cat="SM" id="card-SM" style="--accent: #0284C7;">
+      <div class="card-icon" style="color: #0284C7;">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="5.5" cy="17.5" r="3.5" />
+          <circle cx="18.5" cy="17.5" r="3.5" />
+          <path d="M15 6h-2l-3 5.5h4.5l2 3.5h-5.5l-2.5-4.5H5.5" />
+          <path d="M13 6l2.5-3.5h3" />
+          <path d="M8 17.5h7" />
+        </svg>
+      </div>
+      <div class="badge-row">
+        <span class="cat-badge" style="background:#0284C7;">SM</span>
+      </div>
+      <div class="cat-name">Sepeda Motor</div>
+      <div class="cat-desc">Roda 2 & Roda 3</div>
+      <div class="cat-count" id="count-SM">0</div>
+      <div class="card-mini-actions">
+        <button class="mini-btn btn-undo" data-action="m1" data-cat="SM" type="button" title="Undo 1">-1</button>
+        <button class="mini-btn btn-add5" data-action="p5" data-cat="SM" type="button" title="Tambah 5">+5</button>
+      </div>
+    </div>
+
+    <div class="vehicle-card" data-cat="MP" id="card-MP" style="--accent: #2563EB;">
+      <div class="card-icon" style="color: #2563EB;">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9L1.5 12.5C1.2 13 1 13.5 1 14.1V16c0 .6.4 1 1 1h2" />
+          <circle cx="7" cy="17" r="2.5" />
+          <path d="M9.5 17h5" />
+          <circle cx="17" cy="17" r="2.5" />
+        </svg>
+      </div>
+      <div class="badge-row">
+        <span class="cat-badge" style="background:#2563EB;">MP</span>
+      </div>
+      <div class="cat-name">Mobil Penumpang</div>
+      <div class="cat-desc">Sedan, Minibus, Van</div>
+      <div class="cat-count" id="count-MP">0</div>
+      <div class="card-mini-actions">
+        <button class="mini-btn btn-undo" data-action="m1" data-cat="MP" type="button" title="Undo 1">-1</button>
+        <button class="mini-btn btn-add5" data-action="p5" data-cat="MP" type="button" title="Tambah 5">+5</button>
+      </div>
+    </div>
+
+    <div class="vehicle-card" data-cat="KS" id="card-KS" style="--accent: #10B981;">
+      <div class="card-icon" style="color: #10B981;">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="5" width="13" height="11" rx="1" />
+          <path d="M14 8h4.5l3.5 4.5V16h-8V8z" />
+          <circle cx="5.5" cy="18.5" r="2.5" />
+          <circle cx="17.5" cy="18.5" r="2.5" />
+          <path d="M8 18.5h7" />
+          <path d="M7 5v11" />
+        </svg>
+      </div>
+      <div class="badge-row">
+        <span class="cat-badge" style="background:#10B981;">KS</span>
+      </div>
+      <div class="cat-name">Kendaraan Sedang</div>
+      <div class="cat-desc">Truk 2 As & Bus Sedang</div>
+      <div class="cat-count" id="count-KS">0</div>
+      <div class="card-mini-actions">
+        <button class="mini-btn btn-undo" data-action="m1" data-cat="KS" type="button" title="Undo 1">-1</button>
+        <button class="mini-btn btn-add5" data-action="p5" data-cat="KS" type="button" title="Tambah 5">+5</button>
+      </div>
+    </div>
+
+    <div class="vehicle-card" data-cat="BB" id="card-BB" style="--accent: #F59E0B;">
+      <div class="card-icon" style="color: #F59E0B;">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6c0-1.1.9-2 2-2h15c1.1 0 2 .9 2 2v10c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1V6z" />
+          <line x1="2" y1="11" x2="22" y2="11" />
+          <line x1="6" y1="4" x2="6" y2="11" />
+          <line x1="11" y1="4" x2="11" y2="11" />
+          <line x1="16" y1="4" x2="16" y2="11" />
+          <circle cx="6.5" cy="18.5" r="2.5" />
+          <circle cx="17.5" cy="18.5" r="2.5" />
+          <path d="M9 18.5h6" />
+        </svg>
+      </div>
+      <div class="badge-row">
+        <span class="cat-badge" style="background:#F59E0B;">BB</span>
+      </div>
+      <div class="cat-name">Bus Besar</div>
+      <div class="cat-desc">Bus 2 As / 3 As</div>
+      <div class="cat-count" id="count-BB">0</div>
+      <div class="card-mini-actions">
+        <button class="mini-btn btn-undo" data-action="m1" data-cat="BB" type="button" title="Undo 1">-1</button>
+        <button class="mini-btn btn-add5" data-action="p5" data-cat="BB" type="button" title="Tambah 5">+5</button>
+      </div>
+    </div>
+
+    <div class="vehicle-card" data-cat="TB" id="card-TB" style="--accent: #8B5CF6;">
+      <div class="card-icon" style="color: #8B5CF6;">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="6" width="14" height="10" rx="1" />
+          <line x1="5" y1="6" x2="5" y2="16" />
+          <line x1="9" y1="6" x2="9" y2="16" />
+          <path d="M15 10h3l3 3v3h-6v-6z" />
+          <circle cx="4" cy="18" r="2" />
+          <circle cx="8" cy="18" r="2" />
+          <circle cx="18" cy="18" r="2" />
+          <line x1="10" y1="18" x2="16" y2="18" />
+        </svg>
+      </div>
+      <div class="badge-row">
+        <span class="cat-badge" style="background:#8B5CF6;">TB</span>
+      </div>
+      <div class="cat-name">Truk Berat</div>
+      <div class="cat-desc">Tronton, Gandeng, Tempel</div>
+      <div class="cat-count" id="count-TB">0</div>
+      <div class="card-mini-actions">
+        <button class="mini-btn btn-undo" data-action="m1" data-cat="TB" type="button" title="Undo 1">-1</button>
+        <button class="mini-btn btn-add5" data-action="p5" data-cat="TB" type="button" title="Tambah 5">+5</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="summary-total">
+      Total Hitungan Interval Aktif: <span id="summary-total-val" class="summary-total-num">0 kend</span>
+    </div>
+    <div id="summary-breakdown" class="summary-breakdown">
+      SM: 0 | MP: 0 | KS: 0 | BB: 0 | TB: 0
+    </div>
+  </div>
+</div>
+"""
+
+FIELD_COUNTER_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+:host {
+  display: block;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  color: var(--st-text-color, #1e293b);
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+.field-counter-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-card {
+  background: var(--st-secondary-background-color, #f8fafc);
+  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.22));
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.clock-card { border-left: 4px solid #2563EB !important; }
+.timer-card { border-left: 4px solid #64748B; }
+.status-card { border-left: 4px solid #64748B; }
+
+.kpi-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--st-text-color, #1e293b);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.kpi-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 2px 0;
+}
+
+.text-blue { color: #2563EB !important; }
+.text-green { color: #10B981 !important; }
+.text-amber { color: #F59E0B !important; }
+.text-red { color: #EF4444 !important; }
+.text-gray { color: #64748B !important; }
+
+.kpi-subtext {
+  font-size: 11.5px;
+  color: var(--st-text-color, #1e293b);
+  opacity: 0.75;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alert-banner {
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid #f59e0b;
+  color: #d97706;
+}
+
+.alert-alarm {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  animation: pulse-border 1s infinite alternate;
+}
+
+@keyframes pulse-border {
+  from { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  to { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.1); }
+}
+
+.controls-row {
+  display: grid;
+  grid-template-columns: 4fr 5fr 3fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+  .controls-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.ctrl-btn-primary {
+  background: #2563EB;
+  color: #ffffff;
+  border: 1px solid #1D4ED8;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+}
+.ctrl-btn-primary:hover {
+  background: #1D4ED8;
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+.ctrl-btn-primary:active {
+  transform: translateY(1px);
+}
+
+.ctrl-btn-secondary {
+  background: var(--st-secondary-background-color, #f8fafc);
+  color: var(--st-text-color, #1e293b);
+  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
+}
+.ctrl-btn-secondary:hover {
+  border-color: #2563EB;
+  color: #2563EB;
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.ctrl-btn-outline {
+  background: transparent;
+  color: var(--st-text-color, #1e293b);
+  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
+  opacity: 0.85;
+}
+.ctrl-btn-outline:hover {
+  opacity: 1;
+  border-color: #EF4444;
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.section-header {
+  margin-bottom: 14px;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--st-text-color, #1e293b);
+  margin-bottom: 4px;
+}
+.section-desc {
+  font-size: 12px;
+  color: var(--st-text-color, #1e293b);
+  opacity: 0.75;
+  line-height: 1.4;
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vehicle-card {
+  background: var(--st-secondary-background-color, #f8fafc);
+  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.22));
+  border-top: 4px solid var(--accent) !important;
+  border-radius: 12px;
+  padding: 14px 10px 10px 10px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.vehicle-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.vehicle-card:active {
+  transform: scale(0.97);
+}
+
+.vehicle-card.flash {
+  animation: card-flash 0.25s ease-out;
+}
+
+@keyframes card-flash {
+  0% { box-shadow: 0 0 0 4px var(--accent); }
+  100% { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+}
+
+.card-icon {
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.badge-row {
+  margin-bottom: 4px;
+}
+
+.cat-badge {
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  letter-spacing: 0.5px;
+}
+
+.cat-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--st-text-color, #1e293b);
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.cat-desc {
+  font-size: 10.5px;
+  color: var(--st-text-color, #1e293b);
+  opacity: 0.65;
+  height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 6px;
+}
+
+.cat-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--st-text-color, #1e293b);
+  line-height: 1.1;
+  margin: 6px 0 10px 0;
+}
+
+.card-mini-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mini-btn {
+  padding: 5px 0;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
+  background: var(--st-background-color, #ffffff);
+  color: var(--st-text-color, #1e293b);
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.mini-btn:hover {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.mini-btn:active {
+  transform: scale(0.92);
+}
+
+.summary-bar {
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.summary-total {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--st-text-color, #1e293b);
+}
+
+.summary-total-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: #2563EB;
+  margin-left: 4px;
+}
+
+.summary-breakdown {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--st-text-color, #1e293b);
+  opacity: 0.8;
+}
+
+.toast-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  background: #1E293B;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toast-in 0.25s ease-out, toast-out 0.25s ease-in 2.75s forwards;
+  pointer-events: auto;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+"""
+
+FIELD_COUNTER_JS = """
+export default function(component) {
+  const { data, parentElement, setTriggerValue } = component;
+  if (!parentElement) return;
+
+  if (!window.__tm_field_state) {
+    window.__tm_field_state = {
+      counts: { SM: 0, MP: 0, KS: 0, BB: 0, TB: 0 },
+      is_running: false,
+      start_time_ms: null,
+      accumulated_sec: 0,
+      start_wib_str: "--:--:--",
+      last_status: "Tekan Mulai Timer Sesi",
+      auto_saved: false,
+      duration_sec: 900,
+      sesi: "SIANG",
+      lokasi: "Jl. A. Yani - Kota Magelang"
+    };
+  }
+
+  const state = window.__tm_field_state;
+
+  if (data) {
+    if (data.duration_sec) state.duration_sec = Number(data.duration_sec);
+    if (data.sesi) state.sesi = String(data.sesi);
+    if (data.lokasi) state.lokasi = String(data.lokasi);
+  }
+
+  const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+  function getWibDate() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    return new Date(utc + (3600000 * 7));
+  }
+
+  function getWibTimeString() {
+    const d = getWibDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+
+  function getWibDateIso() {
+    const d = getWibDate();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function showToast(msg, icon = "💾") {
+    const container = parentElement.querySelector("#toast-container");
+    if (!container) return;
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentElement) toast.parentElement.removeChild(toast);
+    }, 3000);
+  }
+
+  function flashCard(cat) {
+    const card = parentElement.querySelector(`#card-${cat}`);
+    if (card) {
+      card.classList.remove("flash");
+      void card.offsetWidth;
+      card.classList.add("flash");
+    }
+  }
+
+  function updateCountsUI() {
+    for (const cat of ["SM", "MP", "KS", "BB", "TB"]) {
+      const el = parentElement.querySelector(`#count-${cat}`);
+      if (el) el.textContent = state.counts[cat].toLocaleString();
+    }
+    const tot = state.counts.SM + state.counts.MP + state.counts.KS + state.counts.BB + state.counts.TB;
+    const totEl = parentElement.querySelector("#summary-total-val");
+    if (totEl) totEl.textContent = `${tot.toLocaleString()} kend`;
+
+    const bEl = parentElement.querySelector("#summary-breakdown");
+    if (bEl) {
+      bEl.textContent = `SM: ${state.counts.SM} | MP: ${state.counts.MP} | KS: ${state.counts.KS} | BB: ${state.counts.BB} | TB: ${state.counts.TB}`;
+    }
+  }
+
+  function triggerSave(method) {
+    const end_wib = getWibTimeString();
+    const start_wib = state.start_wib_str !== "--:--:--" ? state.start_wib_str : end_wib;
+    const payload = {
+      event_id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      tanggal: getWibDateIso(),
+      sesi: state.sesi,
+      lokasi: state.lokasi,
+      waktu_mulai_wib: start_wib,
+      waktu_selesai_wib: end_wib,
+      sm: state.counts.SM,
+      mp: state.counts.MP,
+      ks: state.counts.KS,
+      bb: state.counts.BB,
+      tb: state.counts.TB,
+      total: state.counts.SM + state.counts.MP + state.counts.KS + state.counts.BB + state.counts.TB,
+      metode_simpan: method
+    };
+
+    state.counts = { SM: 0, MP: 0, KS: 0, BB: 0, TB: 0 };
+    state.accumulated_sec = 0;
+    if (state.is_running) {
+      state.start_time_ms = Date.now();
+      state.start_wib_str = end_wib;
+    } else {
+      state.start_time_ms = null;
+      state.start_wib_str = "--:--:--";
+    }
+    state.auto_saved = false;
+    state.last_status = `Tersimpan: ${start_wib} - ${end_wib} (${method})`;
+
+    updateCountsUI();
+    showToast(`Interval tersimpan: ${start_wib} - ${end_wib} (${method})`, "✅");
+    setTriggerValue("save_event", payload);
+  }
+
+  function tick() {
+    const d = getWibDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    const timeStr = `${hh}:${mm}:${ss} WIB`;
+    const dateStr = `${HARI[d.getDay()]}, ${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`;
+
+    const clockEl = parentElement.querySelector("#wib-clock-val");
+    if (clockEl) clockEl.textContent = timeStr;
+    const dateEl = parentElement.querySelector("#wib-date-val");
+    if (dateEl) dateEl.textContent = dateStr;
+
+    let elapsed = state.accumulated_sec;
+    if (state.is_running && state.start_time_ms) {
+      elapsed += (Date.now() - state.start_time_ms) / 1000;
+    }
+
+    const dur = state.duration_sec || 900;
+    const curr_m = Math.floor(elapsed / 60);
+    const curr_s = Math.floor(elapsed % 60);
+    const max_m = Math.floor(dur / 60);
+    const max_s = Math.floor(dur % 60);
+    const timerStr = `${String(curr_m).padStart(2, '0')}:${String(curr_s).padStart(2, '0')} / ${String(max_m).padStart(2, '0')}:${String(max_s).padStart(2, '0')}`;
+
+    const timerValEl = parentElement.querySelector("#timer-val");
+    if (timerValEl) {
+      timerValEl.textContent = timerStr;
+      timerValEl.className = `kpi-val ${state.is_running ? "text-green" : "text-gray"}`;
+    }
+
+    const timerCard = parentElement.querySelector("#timer-kpi-card");
+    if (timerCard) {
+      timerCard.style.borderLeft = state.is_running ? "4px solid #10B981" : "4px solid #64748B";
+    }
+
+    const timerStatusText = parentElement.querySelector("#timer-status-text");
+    if (timerStatusText) {
+      timerStatusText.textContent = state.is_running ? "● SEDANG MENCACAH" : "● TIMER DIJEDA / SIAGA";
+    }
+
+    const timerKpiLabel = parentElement.querySelector("#timer-kpi-label");
+    if (timerKpiLabel) {
+      const durLabel = dur >= 60 ? `${Math.floor(dur/60)} MNT` : `${dur} DTK`;
+      timerKpiLabel.textContent = `TIMER INTERVAL (${durLabel})`;
+    }
+
+    const btnToggleLabel = parentElement.querySelector("#btn-timer-label");
+    const btnToggleIcon = parentElement.querySelector("#btn-timer-icon");
+    if (btnToggleLabel) btnToggleLabel.textContent = state.is_running ? "Jeda Timer" : "Mulai Timer Sesi";
+    if (btnToggleIcon) btnToggleIcon.textContent = state.is_running ? "⏸️" : "▶️";
+
+    const statusCard = parentElement.querySelector("#status-kpi-card");
+    const statusTitle = parentElement.querySelector("#status-title");
+    const statusSub = parentElement.querySelector("#status-subtext");
+    const warnBanner = parentElement.querySelector("#alert-warning");
+    const alarmBanner = parentElement.querySelector("#alert-alarm");
+    const warnText = parentElement.querySelector("#alert-warning-text");
+    const alarmText = parentElement.querySelector("#alert-alarm-text");
+
+    const warnThreshold = Math.max(5, dur - 15);
+
+    if (state.is_running && elapsed >= (dur + 10)) {
+      if (!state.auto_saved) {
+        state.auto_saved = true;
+        triggerSave("Auto-Save (+10s)");
+      }
+    } else if (state.is_running && elapsed >= dur) {
+      const sisa_auto = Math.max(0, Math.ceil(dur + 10 - elapsed));
+      if (statusCard) statusCard.style.borderLeft = "4px solid #EF4444";
+      if (statusTitle) {
+        statusTitle.textContent = `TOLERANSI AUTO-SAVE (${sisa_auto}s)`;
+        statusTitle.className = "kpi-val text-red";
+      }
+      if (statusSub) statusSub.textContent = `Data akan tersimpan dalam ${sisa_auto} detik...`;
+
+      if (alarmBanner) {
+        alarmBanner.style.display = "flex";
+        if (alarmText) alarmText.textContent = `WAKTU INTERVAL SELESAI! Klik 'Simpan & Lanjut' atau data akan TERSIMPAN OTOMATIS dalam ${sisa_auto} detik...`;
+      }
+      if (warnBanner) warnBanner.style.display = "none";
+    } else if (state.is_running && elapsed >= warnThreshold) {
+      const sisa_w = Math.max(0, Math.ceil(dur - elapsed));
+      if (statusCard) statusCard.style.borderLeft = "4px solid #F59E0B";
+      if (statusTitle) {
+        statusTitle.textContent = "PERINGATAN AKHIR";
+        statusTitle.className = "kpi-val text-amber";
+      }
+      if (statusSub) statusSub.textContent = `${sisa_w} detik menuju akhir interval`;
+
+      if (warnBanner) {
+        warnBanner.style.display = "flex";
+        if (warnText) warnText.textContent = `Perhatian: ${sisa_w} detik menuju akhir interval! Bersiap untuk menyimpan data pencacahan.`;
+      }
+      if (alarmBanner) alarmBanner.style.display = "none";
+    } else if (state.is_running) {
+      if (statusCard) statusCard.style.borderLeft = "4px solid #2563EB";
+      if (statusTitle) {
+        statusTitle.textContent = "INTERVAL AKTIF";
+        statusTitle.className = "kpi-val text-blue";
+      }
+      if (statusSub) statusSub.textContent = `Mulai: ${state.start_wib_str}`;
+      if (warnBanner) warnBanner.style.display = "none";
+      if (alarmBanner) alarmBanner.style.display = "none";
+    } else {
+      if (statusCard) statusCard.style.borderLeft = "4px solid #64748B";
+      if (statusTitle) {
+        statusTitle.textContent = "SIAGA (STANDBY)";
+        statusTitle.className = "kpi-val text-gray";
+      }
+      if (statusSub) statusSub.textContent = state.last_status || "Tekan Mulai Timer Sesi";
+      if (warnBanner) warnBanner.style.display = "none";
+      if (alarmBanner) alarmBanner.style.display = "none";
+    }
+  }
+
+  const btnToggle = parentElement.querySelector("#btn-timer-toggle");
+  if (btnToggle) {
+    btnToggle.onclick = () => {
+      if (!state.is_running) {
+        state.is_running = true;
+        state.start_time_ms = Date.now();
+        if (state.start_wib_str === "--:--:--") {
+          state.start_wib_str = getWibTimeString();
+        }
+        showToast("Timer sesi survei dimulai!", "▶️");
+      } else {
+        if (state.start_time_ms) {
+          state.accumulated_sec += (Date.now() - state.start_time_ms) / 1000;
+        }
+        state.start_time_ms = null;
+        state.is_running = false;
+        showToast("Timer sesi dijeda.", "⏸️");
+      }
+      tick();
+    };
+  }
+
+  const btnSave = parentElement.querySelector("#btn-save-next");
+  if (btnSave) {
+    btnSave.onclick = () => {
+      triggerSave("Manual");
+    };
+  }
+
+  const btnReset = parentElement.querySelector("#btn-reset-cnt");
+  if (btnReset) {
+    btnReset.onclick = () => {
+      state.counts = { SM: 0, MP: 0, KS: 0, BB: 0, TB: 0 };
+      updateCountsUI();
+      showToast("Counter aktif telah di-reset ke 0!", "🔄");
+    };
+  }
+
+  const cards = parentElement.querySelectorAll(".vehicle-card");
+  cards.forEach(card => {
+    card.onclick = (e) => {
+      const cat = card.getAttribute("data-cat");
+      if (cat && state.counts[cat] !== undefined) {
+        state.counts[cat] += 1;
+        flashCard(cat);
+        updateCountsUI();
+      }
+    };
+  });
+
+  const miniBtns = parentElement.querySelectorAll(".mini-btn");
+  miniBtns.forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const action = btn.getAttribute("data-action");
+      const cat = btn.getAttribute("data-cat");
+      if (cat && state.counts[cat] !== undefined) {
+        if (action === "m1") {
+          state.counts[cat] = Math.max(0, state.counts[cat] - 1);
+        } else if (action === "p5") {
+          state.counts[cat] += 5;
+        }
+        flashCard(cat);
+        updateCountsUI();
+      }
+    };
+  });
+
+  const keyMap = { "1": "SM", "2": "MP", "3": "KS", "4": "BB", "5": "TB" };
+  const handleKeyDown = (e) => {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+      return;
+    }
+    const cat = keyMap[e.key];
+    if (cat && state.counts[cat] !== undefined) {
+      state.counts[cat] += 1;
+      flashCard(cat);
+      updateCountsUI();
+    }
+  };
+  window.addEventListener("keydown", handleKeyDown);
+
+  updateCountsUI();
+  tick();
+
+  if (window.__tm_survey_timer) {
+    clearInterval(window.__tm_survey_timer);
+  }
+  window.__tm_survey_timer = setInterval(tick, 250);
+
+  return () => {
+    if (window.__tm_survey_timer) {
+      clearInterval(window.__tm_survey_timer);
+      window.__tm_survey_timer = null;
+    }
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}
+"""
+
+transmetrics_field_counter = st.components.v2.component(
+    "transmetrics_field_counter",
+    html=FIELD_COUNTER_HTML,
+    css=FIELD_COUNTER_CSS,
+    js=FIELD_COUNTER_JS,
+    isolate_styles=True
+)
 
 
 # 6. HEADER UTAMA APLIKASI (MINIMALIS & RAMPING - STANDAR SAAS MODERN)
@@ -2789,233 +3734,46 @@ Modul survei pencacahan lalu lintas lapangan terpadu berstandar <strong>PKJI 202
 
     st.markdown("---")
 
-    # 2. PANEL JAM DIGITAL & TIMER INTERVAL BERJALAN (@st.fragment)
-    @st.fragment(run_every="1s")
-    def render_survey_timer_panel(durasi_detik, lokasi, sesi):
-        now_wib = datetime.now(WIB_TZ)
-        now_str = now_wib.strftime("%H:%M:%S WIB")
-        hari_map = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
-        bulan_map = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
-        date_str = f"{hari_map[now_wib.weekday()]}, {now_wib.day} {bulan_map[now_wib.month]} {now_wib.year}"
-        
-        is_running = st.session_state.get("survey_timer_running", False)
-        accum = st.session_state.get("survey_accumulated", 0.0)
-        start_ts = st.session_state.get("survey_start_ts", None)
-        
-        if is_running and start_ts is not None:
-            elapsed = accum + (time.time() - start_ts)
-        else:
-            elapsed = accum
-            
-        # Logika Auto-Save jika melewati durasi + 10 detik
-        if is_running and elapsed >= (durasi_detik + 10):
-            start_wib = st.session_state.get("survey_start_wib_str", now_wib.strftime("%H:%M:%S"))
-            end_wib = now_wib.strftime("%H:%M:%S")
-            counts = st.session_state.get("survey_counts", {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0})
-            save_survey_to_db(
-                tanggal=now_wib.strftime("%Y-%m-%d"),
-                sesi=sesi,
-                lokasi=lokasi,
-                waktu_mulai_wib=start_wib,
-                waktu_selesai_wib=end_wib,
-                sm=counts["SM"], mp=counts["MP"], ks=counts["KS"], bb=counts["BB"], tb=counts["TB"],
-                metode_simpan="Auto-Save (+10s)"
-            )
-            # Reset counter aktif
-            st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
-            # Reset timer untuk interval berikutnya
-            st.session_state.survey_accumulated = 0.0
-            st.session_state.survey_start_ts = time.time()
-            st.session_state.survey_start_wib_str = end_wib
-            st.session_state.survey_last_status = f"Interval otomatis tersimpan ({start_wib} - {end_wib}) [+10s]"
-            st.toast("Data interval otomatis tersimpan ke database!", icon="💾")
-            st.rerun(scope="app")
-            return
-            
-        # 3 Kartu Panel Timer
-        t_c1, t_c2, t_c3 = st.columns(3)
-        with t_c1:
-            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid #2563EB !important; padding: 12px 16px;">
-    <div class="kpi-label">
-        <span>JAM REAL-TIME (WIB)</span>
-        <span style="color:#2563EB;">{ICONS['clock']}</span>
-    </div>
-    <div class="kpi-value" style="font-size: 24px; color:#2563EB !important;">{now_str}</div>
-    <div class="kpi-subtext" style="font-size: 11.5px;">{date_str}</div>
-</div>""", unsafe_allow_html=True)
+    # 2. KOMPONEN TERPADU ZERO-LAG TRAFFIC COUNTER (st.components.v2)
+    counter_result = transmetrics_field_counter(
+        key="field_counter_v2",
+        data={
+            "duration_sec": durasi_target_detik,
+            "sesi": survey_sesi,
+            "lokasi": survey_lokasi
+        },
+        on_save_event_change=lambda: None
+    )
 
-        with t_c2:
-            curr_m = int(elapsed // 60)
-            curr_s = int(elapsed % 60)
-            max_m = int(durasi_detik // 60)
-            max_s = int(durasi_detik % 60)
-            timer_str = f"{curr_m:02d}:{curr_s:02d} / {max_m:02d}:{max_s:02d}"
-            timer_color = "#10B981" if is_running else "#64748B"
-            timer_state_label = "SEDANG MENCACAH" if is_running else "TIMER DIJEDA / SIAGA"
-            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid {timer_color} !important; padding: 12px 16px;">
-    <div class="kpi-label">
-        <span>TIMER INTERVAL ({int(durasi_detik//60) if durasi_detik>=60 else durasi_detik} {'MNT' if durasi_detik>=60 else 'DTK'})</span>
-        <span style="color:{timer_color};">{ICONS['activity']}</span>
-    </div>
-    <div class="kpi-value" style="font-size: 24px; color:{timer_color} !important;">{timer_str}</div>
-    <div class="kpi-subtext" style="font-size: 11.5px;">● {timer_state_label}</div>
-</div>""", unsafe_allow_html=True)
+    # Tangkap event simpan dari komponen v2 (Manual maupun Auto-Save +10s)
+    if counter_result:
+        payload = counter_result.get("save_event") if hasattr(counter_result, "get") else getattr(counter_result, "save_event", None)
+        if isinstance(payload, dict):
+            event_id = payload.get("event_id")
+            if "processed_event_ids" not in st.session_state:
+                st.session_state.processed_event_ids = set()
 
-        with t_c3:
-            if is_running and elapsed >= durasi_detik:
-                status_color = "#EF4444"
-                sisa_auto = max(0, int(durasi_detik + 10 - elapsed))
-                status_title = f"TOLERANSI AUTO-SAVE ({sisa_auto}s)"
-                status_desc = f"Data akan tersimpan dalam {sisa_auto} detik..."
-            elif is_running and elapsed >= (durasi_detik - 15):
-                status_color = "#F59E0B"
-                status_title = "PERINGATAN AKHIR"
-                status_desc = f"{max(0, int(durasi_detik - elapsed))} detik menuju akhir interval"
-            elif is_running:
-                status_color = "#2563EB"
-                status_title = "INTERVAL AKTIF"
-                status_desc = f"Mulai: {st.session_state.get('survey_start_wib_str', '--:--:--')}"
-            else:
-                status_color = "#64748B"
-                status_title = "SIAGA (STANDBY)"
-                status_desc = st.session_state.get("survey_last_status", "Tekan Mulai Timer Sesi")
-
-            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid {status_color} !important; padding: 12px 16px;">
-    <div class="kpi-label">
-        <span>STATUS INTERVAL & SIMPAN</span>
-        <span style="color:{status_color};">{ICONS['save']}</span>
-    </div>
-    <div class="kpi-value" style="font-size: 18px; color:{status_color} !important; font-weight:800;">{status_title}</div>
-    <div class="kpi-subtext" style="font-size: 11.5px;">{status_desc}</div>
-</div>""", unsafe_allow_html=True)
-
-        # Alert Banner Visual
-        if is_running and elapsed >= durasi_detik:
-            sisa_auto = max(0, int(durasi_detik + 10 - elapsed))
-            st.markdown(f"""<div style="background:rgba(239, 68, 68, 0.12); border:1px solid #ef4444; border-radius:8px; padding:10px 14px; margin-top:12px; color:#ef4444; font-weight:700; display:flex; align-items:center; gap:8px;">
-<span style="font-size:18px;">🚨</span>
-<span>WAKTU INTERVAL SELESAI! Klik 'Simpan & Lanjut' atau data akan TERSIMPAN OTOMATIS dalam {sisa_auto} detik...</span>
-</div>""", unsafe_allow_html=True)
-        elif is_running and elapsed >= (durasi_detik - 15):
-            sisa_w = max(0, int(durasi_detik - elapsed))
-            st.markdown(f"""<div style="background:rgba(245, 158, 11, 0.12); border:1px solid #f59e0b; border-radius:8px; padding:10px 14px; margin-top:12px; color:#d97706; font-weight:700; display:flex; align-items:center; gap:8px;">
-<span style="font-size:18px;">⚠️</span>
-<span>Perhatian: {sisa_w} detik menuju akhir interval! Bersiap untuk menyimpan data pencacahan.</span>
-</div>""", unsafe_allow_html=True)
-
-        # Tombol Kontrol Sesi & Timer
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-        c_b1, c_b2, c_b3 = st.columns([4, 5, 3])
-        with c_b1:
-            if not is_running:
-                if st.button("▶️ Mulai Timer Sesi", key="btn_timer_start", use_container_width=True):
-                    st.session_state.survey_timer_running = True
-                    st.session_state.survey_start_ts = time.time()
-                    if st.session_state.get("survey_start_wib_str", "--:--:--") == "--:--:--":
-                        st.session_state.survey_start_wib_str = now_wib.strftime("%H:%M:%S")
-                    st.rerun(scope="app")
-            else:
-                if st.button("⏸️ Jeda Timer", key="btn_timer_pause", use_container_width=True):
-                    if st.session_state.get("survey_start_ts") is not None:
-                        st.session_state.survey_accumulated += (time.time() - st.session_state.survey_start_ts)
-                    st.session_state.survey_start_ts = None
-                    st.session_state.survey_timer_running = False
-                    st.rerun(scope="app")
-
-        with c_b2:
-            if st.button("💾 Simpan & Lanjut Interval", key="btn_timer_save_next", type="primary", use_container_width=True):
-                start_wib = st.session_state.get("survey_start_wib_str", now_wib.strftime("%H:%M:%S"))
-                end_wib = now_wib.strftime("%H:%M:%S")
-                counts = st.session_state.get("survey_counts", {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0})
+            if event_id and event_id not in st.session_state.processed_event_ids:
+                st.session_state.processed_event_ids.add(event_id)
+                w_mulai = payload.get("waktu_mulai_wib", "--:--:--")
+                w_selesai = payload.get("waktu_selesai_wib", "--:--:--")
+                metode = payload.get("metode_simpan", "Manual")
                 save_survey_to_db(
-                    tanggal=now_wib.strftime("%Y-%m-%d"),
-                    sesi=sesi,
-                    lokasi=lokasi,
-                    waktu_mulai_wib=start_wib,
-                    waktu_selesai_wib=end_wib,
-                    sm=counts["SM"], mp=counts["MP"], ks=counts["KS"], bb=counts["BB"], tb=counts["TB"],
-                    metode_simpan="Manual"
+                    tanggal=payload.get("tanggal", datetime.now(WIB_TZ).strftime("%Y-%m-%d")),
+                    sesi=payload.get("sesi", survey_sesi),
+                    lokasi=payload.get("lokasi", survey_lokasi),
+                    waktu_mulai_wib=w_mulai,
+                    waktu_selesai_wib=w_selesai,
+                    sm=int(payload.get("sm", 0)),
+                    mp=int(payload.get("mp", 0)),
+                    ks=int(payload.get("ks", 0)),
+                    bb=int(payload.get("bb", 0)),
+                    tb=int(payload.get("tb", 0)),
+                    metode_simpan=metode
                 )
-                st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
-                st.session_state.survey_accumulated = 0.0
-                st.session_state.survey_start_ts = time.time() if is_running else None
-                st.session_state.survey_start_wib_str = end_wib
-                st.session_state.survey_last_status = f"Interval manual tersimpan ({start_wib} - {end_wib})"
-                st.toast("Data interval berhasil disimpan ke database!", icon="✅")
-                st.rerun(scope="app")
-
-        with c_b3:
-            if st.button("🔄 Reset Counter", key="btn_timer_reset_cnt", use_container_width=True):
-                st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
-                st.toast("Counter aktif telah di-reset ke 0!", icon="🔄")
-                st.rerun(scope="app")
-
-    # Panggil panel timer (fragment)
-    render_survey_timer_panel(durasi_target_detik, survey_lokasi, survey_sesi)
-
-    st.markdown("---")
-
-    # 3. PAPAN TOMBOL PENCACAHAN MODERN (5 KATEGORI PKJI 2023)
-    st.markdown(f"""<div class="content-box-title" style="margin-bottom:12px;">
-<span style="color:#2563EB;">{ICONS['car']}</span> Papan Tombol Pencacahan Manual (5 Kategori PKJI 2023)
-</div>
-<p style="font-size:12.5px; color:var(--text-color); opacity:0.75; margin-top:-6px; margin-bottom:14px;">
-Gunakan tombol <strong>+1</strong> untuk mencacah setiap kendaraan yang melintas. Gunakan <strong>-1</strong> untuk koreksi (Undo) dan <strong>+5</strong> untuk rombongan kendaraan padat.
-</p>""", unsafe_allow_html=True)
-
-    # 5 Kartu Kategori
-    vehicle_cats = [
-        {"code": "SM", "name": "Sepeda Motor", "desc": "Roda 2 & Roda 3", "accent": "#0284C7", "icon": ICONS['motorcycle']},
-        {"code": "MP", "name": "Mobil Penumpang", "desc": "Sedan, Minibus, Van", "accent": "#2563EB", "icon": ICONS['car']},
-        {"code": "KS", "name": "Kendaraan Sedang", "desc": "Truk 2 As & Bus Sedang", "accent": "#10B981", "icon": ICONS['truck']},
-        {"code": "BB", "name": "Bus Besar", "desc": "Bus 2 As / 3 As", "accent": "#F59E0B", "icon": ICONS['bus']},
-        {"code": "TB", "name": "Truk Berat", "desc": "Tronton, Gandeng, Tempel", "accent": "#8B5CF6", "icon": ICONS['truck']}
-    ]
-
-    v_cols = st.columns(5)
-    for idx, v in enumerate(vehicle_cats):
-        code = v["code"]
-        val = st.session_state.survey_counts.get(code, 0)
-        with v_cols[idx]:
-            st.markdown(f"""<div class="kpi-card" style="border-top: 4px solid {v['accent']} !important; text-align: center; padding: 12px 8px; margin-bottom: 8px;">
-    <div style="color:{v['accent']}; margin-bottom: 2px;">{v['icon']}</div>
-    <div style="margin-bottom: 2px;">
-        <span style="background:{v['accent']}; color:#ffffff; font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:6px;">{code}</span>
-    </div>
-    <div style="font-size:11.5px; font-weight:600; color:var(--text-color); opacity:0.85; line-height:1.2; height:26px; display:flex; align-items:center; justify-content:center;">
-        {v['name']}
-    </div>
-    <div style="font-family:'JetBrains Mono', monospace; font-size:30px; font-weight:800; color:var(--text-color); margin:4px 0 2px 0;">
-        {val:,}
-    </div>
-</div>""", unsafe_allow_html=True)
-            
-            # Tombol +1
-            if st.button(f"+1", key=f"btn_p1_{code}", type="primary", use_container_width=True):
-                st.session_state.survey_counts[code] += 1
+                st.session_state.survey_last_status = f"Interval tersimpan ({w_mulai} - {w_selesai}) [{metode}]"
+                st.toast(f"Data interval {w_mulai} - {w_selesai} berhasil disimpan ({metode})!", icon="💾")
                 st.rerun()
-                
-            # Tombol -1 dan +5
-            sub_c1, sub_c2 = st.columns(2)
-            with sub_c1:
-                if st.button("-1", key=f"btn_m1_{code}", use_container_width=True):
-                    st.session_state.survey_counts[code] = max(0, st.session_state.survey_counts[code] - 1)
-                    st.rerun()
-            with sub_c2:
-                if st.button("+5", key=f"btn_p5_{code}", use_container_width=True):
-                    st.session_state.survey_counts[code] += 5
-                    st.rerun()
-
-    # Total Bar Active
-    tot_active = sum(st.session_state.survey_counts.values())
-    st.markdown(f"""<div style="background:rgba(37, 99, 235, 0.06); border:1px solid rgba(37, 99, 235, 0.2); border-radius:8px; padding:10px 16px; margin-top:10px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-    <div style="font-size:13px; font-weight:700; color:var(--text-color);">
-        Total Hitungan Interval Aktif: <span style="font-family:'JetBrains Mono', monospace; font-size:16px; color:#2563EB;">{tot_active:,} kend</span>
-    </div>
-    <div style="font-size:12px; color:var(--text-color); opacity:0.8; font-family:'JetBrains Mono', monospace;">
-        SM: {st.session_state.survey_counts['SM']} | MP: {st.session_state.survey_counts['MP']} | KS: {st.session_state.survey_counts['KS']} | BB: {st.session_state.survey_counts['BB']} | TB: {st.session_state.survey_counts['TB']}
-    </div>
-</div>""", unsafe_allow_html=True)
 
     st.markdown("---")
 
