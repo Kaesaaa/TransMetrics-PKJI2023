@@ -69,6 +69,18 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------------------------------
+# 1B. INISIALISASI TEMA APLIKASI (LIGHT / DARK MODE PER-SESI)
+# -------------------------------------------------------------------------------------------------
+if "ui_theme" not in st.session_state:
+    st.session_state["ui_theme"] = "light"
+
+def toggle_ui_theme():
+    if st.session_state.get("ui_theme", "light") == "light":
+        st.session_state["ui_theme"] = "dark"
+    else:
+        st.session_state["ui_theme"] = "light"
+
+# -------------------------------------------------------------------------------------------------
 # 2. SISTEM IKON VEKTOR LUCIDE (SVG INLINE MODERN & BERSIH)
 # -------------------------------------------------------------------------------------------------
 ICONS = {
@@ -105,37 +117,145 @@ ICONS = {
 }
 
 # -------------------------------------------------------------------------------------------------
-# 3. CUSTOM CSS - TAMPILAN MODERN STANDAR APLIKASI PRODUKSI (SAAS DASHBOARD 60-30-10)
+# 3. CUSTOM CSS DINAMIS 60-30-10 (ADAPTIF LIGHT MODE & DARK MODE PER-SESI)
 # -------------------------------------------------------------------------------------------------
-st.markdown("""
+ui_theme = st.session_state.get("ui_theme", "light")
+is_dark = (ui_theme == "dark")
+
+if is_dark:
+    theme_bg = "#0B1120"
+    theme_sec_bg = "#111827"
+    theme_card_bg = "#111827"
+    theme_input_bg = "#0F172A"
+    theme_text = "#F1F5F9"
+    theme_text_sec = "#94A3B8"
+    theme_border = "rgba(148, 163, 184, 0.22)"
+    theme_hover_bg = "#1E293B"
+    theme_tab_active_bg = "#0B1120"
+    theme_tab_active_text = "#38BDF8"
+    theme_tab_active_border = "rgba(56, 189, 248, 0.35)"
+else:
+    theme_bg = "#F8FAFC"
+    theme_sec_bg = "#FFFFFF"
+    theme_card_bg = "#FFFFFF"
+    theme_input_bg = "#FFFFFF"
+    theme_text = "#1E293B"
+    theme_text_sec = "#475569"
+    theme_border = "rgba(148, 163, 184, 0.30)"
+    theme_hover_bg = "#F1F5F9"
+    theme_tab_active_bg = "#FFFFFF"
+    theme_tab_active_text = "#2563EB"
+    theme_tab_active_border = "rgba(37, 99, 235, 0.30)"
+
+st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-    html, body, [class*="css"] {
+    :root {{
+        --background-color: {theme_bg};
+        --secondary-background-color: {theme_sec_bg};
+        --text-color: {theme_text};
+        --text-secondary: {theme_text_sec};
+        --border-color: {theme_border};
+        --input-bg: {theme_input_bg};
+        --primary-color: #2563EB;
+    }}
+
+    html, body, [class*="css"] {{
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+    }}
 
     /* 60% Dominan: Latar Netral Bersih */
-    .stApp {
-        background-color: var(--background-color);
-        color: var(--text-color);
-    }
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
+        background-color: {theme_bg} !important;
+        color: {theme_text} !important;
+    }}
 
-    [data-testid="stSidebar"] {
-        background-color: var(--secondary-background-color) !important;
-        border-right: 1px solid rgba(148, 163, 184, 0.22) !important;
-    }
+    [data-testid="stSidebar"] {{
+        background-color: {theme_sec_bg} !important;
+        border-right: 1px solid {theme_border} !important;
+    }}
+    [data-testid="stSidebar"] * {{
+        color: {theme_text} !important;
+    }}
+    [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span {{
+        color: {theme_text} !important;
+    }}
 
-    .block-container {
+    .block-container {{
         padding-top: 1.2rem;
         padding-bottom: 2rem;
         padding-left: 2rem;
         padding-right: 2rem;
         max-width: 1440px;
-    }
+    }}
+
+    /* Widget Label */
+    [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] span {{
+        color: {theme_text} !important;
+        font-weight: 600;
+    }}
+
+    /* Inputs Teks, Angka, Textarea */
+    [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {{
+        background-color: {theme_input_bg} !important;
+        color: {theme_text} !important;
+        border-color: {theme_border} !important;
+        border-radius: 8px !important;
+    }}
+
+    /* Selectbox */
+    [data-baseweb="select"] > div {{
+        background-color: {theme_input_bg} !important;
+        color: {theme_text} !important;
+        border-color: {theme_border} !important;
+        border-radius: 8px !important;
+    }}
+    [data-baseweb="select"] * {{
+        color: {theme_text} !important;
+    }}
+
+    /* Dropdown popover list menu */
+    [data-baseweb="popover"], [data-baseweb="menu"], [data-baseweb="popover"] ul {{
+        background-color: {theme_sec_bg} !important;
+        color: {theme_text} !important;
+        border: 1px solid {theme_border} !important;
+        border-radius: 8px !important;
+    }}
+    [data-baseweb="menu"] li, [data-baseweb="menu"] [role="option"] {{
+        background-color: {theme_sec_bg} !important;
+        color: {theme_text} !important;
+    }}
+    [data-baseweb="menu"] li:hover, [data-baseweb="menu"] [aria-selected="true"] {{
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
+    }}
+
+    /* Number Input Step buttons (+/-) */
+    [data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"] {{
+        background-color: {theme_hover_bg} !important;
+        color: {theme_text} !important;
+        border-color: {theme_border} !important;
+    }}
+
+    /* Expander */
+    [data-testid="stExpander"] {{
+        background-color: {theme_sec_bg} !important;
+        border: 1px solid {theme_border} !important;
+        border-radius: 10px !important;
+    }}
+    [data-testid="stExpander"] summary {{
+        color: {theme_text} !important;
+    }}
+    [data-testid="stExpander"] summary:hover {{
+        color: #2563EB !important;
+    }}
+    [data-testid="stExpander"] details {{
+        background-color: {theme_sec_bg} !important;
+    }}
 
     /* 10% Aksen Aksi Konsisten: Royal Blue (#2563EB) untuk Primary Buttons */
-    button[kind="primary"], .stButton > button[kind="primary"], button[data-testid="baseButton-primary"] {
+    button[kind="primary"], .stButton > button[kind="primary"], button[data-testid="baseButton-primary"] {{
         background-color: #2563EB !important;
         border-color: #2563EB !important;
         color: #FFFFFF !important;
@@ -145,194 +265,166 @@ st.markdown("""
         padding: 0.5rem 1rem !important;
         box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         transition: all 0.2s ease !important;
-    }
-    button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover, button[data-testid="baseButton-primary"]:hover {
+    }}
+    button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover, button[data-testid="baseButton-primary"]:hover {{
         background-color: #1D4ED8 !important;
         border-color: #1D4ED8 !important;
         transform: translateY(-1px);
         box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25);
-    }
+    }}
 
     /* Secondary Buttons: Border Halus 8px Radius */
-    button[kind="secondary"], .stButton > button[kind="secondary"], button[data-testid="baseButton-secondary"] {
+    button[kind="secondary"], .stButton > button[kind="secondary"], button[data-testid="baseButton-secondary"] {{
         border-radius: 8px !important;
-        border: 1px solid rgba(148, 163, 184, 0.3) !important;
-        background-color: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
+        border: 1px solid {theme_border} !important;
+        background-color: {theme_sec_bg} !important;
+        color: {theme_text} !important;
         font-weight: 600 !important;
         font-size: 13px !important;
         transition: all 0.2s ease !important;
-    }
-    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover {
+    }}
+    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover {{
         border-color: #2563EB !important;
         color: #2563EB !important;
         transform: translateY(-1px);
-    }
+    }}
 
     /* Header Ramping & Lega (Standar SaaS Modern) */
-    .app-header-bar {
-        background: var(--secondary-background-color);
-        border: 1px solid rgba(148, 163, 184, 0.22);
+    .app-header-bar {{
+        background: {theme_sec_bg};
+        border: 1px solid {theme_border};
         border-radius: 12px;
         padding: 16px 20px;
         margin-bottom: 20px;
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
-    }
+    }}
 
     /* 30% Struktur: Kartu & Panel Grid 8px Kelipatan */
-    .kpi-container {
+    .kpi-container {{
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 16px;
         margin-bottom: 20px;
-    }
+    }}
 
-    @media (max-width: 960px) {
-        .kpi-container {
+    @media (max-width: 960px) {{
+        .kpi-container {{
             grid-template-columns: repeat(2, 1fr);
-        }
-    }
+        }}
+    }}
 
-    @media (max-width: 600px) {
-        .kpi-container {
+    @media (max-width: 600px) {{
+        .kpi-container {{
             grid-template-columns: 1fr;
-        }
-    }
+        }}
+    }}
 
-    .kpi-card, .section-card, .info-card, .roadmap-card, .content-box {
-        background: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
-        border: 1px solid rgba(148, 163, 184, 0.22) !important;
+    .kpi-card, .section-card, .info-card, .roadmap-card, .content-box {{
+        background: {theme_card_bg} !important;
+        color: {theme_text} !important;
+        border: 1px solid {theme_border} !important;
         border-radius: 12px !important;
         padding: 18px 20px;
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
         transition: all 0.2s ease;
         position: relative;
-    }
+    }}
 
-    .kpi-card:hover, .roadmap-card:hover {
+    .kpi-card:hover, .roadmap-card:hover {{
         transform: translateY(-2px);
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
         border-color: rgba(37, 99, 235, 0.35) !important;
-    }
+    }}
 
-    .kpi-label {
+    .kpi-label {{
         font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.6px;
-        color: var(--text-color) !important;
+        color: {theme_text} !important;
         opacity: 0.72;
         margin-bottom: 8px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-    }
+    }}
 
-    .kpi-value {
+    .kpi-value {{
         font-size: 30px;
         font-weight: 800;
-        color: var(--text-color) !important;
+        color: {theme_text} !important;
         line-height: 1.1;
         font-family: 'JetBrains Mono', monospace;
         letter-spacing: -0.5px;
-    }
+    }}
 
-    .kpi-unit {
+    .kpi-unit {{
         font-size: 13px;
         font-weight: 500;
-        color: var(--text-color) !important;
+        color: {theme_text} !important;
         opacity: 0.68;
         margin-left: 6px;
-    }
+    }}
 
-    .kpi-subtext {
+    .kpi-subtext {{
         font-size: 12px;
-        color: var(--text-color) !important;
-        opacity: 0.72;
+        color: {theme_text_sec} !important;
         margin-top: 10px;
-        font-weight: 500;
-    }
-
-    /* LOS Badge Styles */
-    .los-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 6px 14px;
-        border-radius: 8px;
-        font-weight: 800;
-        font-size: 20px;
-        letter-spacing: 0.5px;
-        color: #ffffff !important;
-        width: 100%;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.12);
-    }
-
-    .los-desc {
-        text-align: center;
-        font-size: 12px;
-        font-weight: 600;
-        margin-top: 6px;
-    }
-
-    .content-box-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--text-color) !important;
-        margin-bottom: 14px;
         display: flex;
         align-items: center;
-        gap: 10px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.22) !important;
-        padding-bottom: 10px;
-    }
-
-    /* Streamlit Tabs - Modern & Bersih */
-    .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
-        background-color: var(--secondary-background-color) !important;
+    }}
+
+    /* Dataframe Styling */
+    [data-testid="stDataFrame"] {{
+        border: 1px solid {theme_border} !important;
+        border-radius: 8px;
+    }}
+
+    /* Navigasi Tab Segmented */
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 6px;
+        background-color: {theme_hover_bg} !important;
         padding: 5px;
         border-radius: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        margin-bottom: 16px;
-    }
+        border: 1px solid {theme_border} !important;
+        margin-bottom: 20px;
+    }}
 
-    .stTabs [data-baseweb="tab"] {
+    .stTabs [data-baseweb="tab"] {{
         height: 42px;
         border-radius: 7px;
         font-weight: 600;
         font-size: 13.5px;
-        color: var(--text-color) !important;
+        color: {theme_text} !important;
         opacity: 0.72;
         padding: 0 18px;
         transition: all 0.15s ease;
-    }
+    }}
 
-    .stTabs [aria-selected="true"] {
-        background-color: var(--background-color) !important;
-        color: #2563EB !important;
+    .stTabs [aria-selected="true"] {{
+        background-color: {theme_tab_active_bg} !important;
+        color: {theme_tab_active_text} !important;
         opacity: 1 !important;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-        border: 1px solid rgba(37, 99, 235, 0.25) !important;
-    }
+        border: 1px solid {theme_tab_active_border} !important;
+    }}
 
-    .info-callout {
+    .info-callout {{
         background: rgba(37, 99, 235, 0.08);
         border-left: 4px solid #2563EB;
         padding: 12px 16px;
         border-radius: 0 8px 8px 0;
         font-size: 13px;
-        color: var(--text-color) !important;
+        color: {theme_text} !important;
         margin-bottom: 14px;
-        border-top: 1px solid rgba(148, 163, 184, 0.2);
-        border-right: 1px solid rgba(148, 163, 184, 0.2);
-        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-    }
+        border-top: 1px solid {theme_border};
+        border-right: 1px solid {theme_border};
+        border-bottom: 1px solid {theme_border};
+    }}
 
     /* Step Banner untuk Guided Flow Tab 2 */
-    .step-banner {
+    .step-banner {{
         display: flex;
         align-items: center;
         gap: 10px;
@@ -343,9 +435,9 @@ st.markdown("""
         margin-bottom: 14px;
         font-size: 13.5px;
         font-weight: 700;
-        color: var(--text-color);
-    }
-    .step-pill {
+        color: {theme_text};
+    }}
+    .step-pill {{
         background: #2563EB;
         color: #ffffff;
         font-size: 11px;
@@ -357,10 +449,9 @@ st.markdown("""
         flex-shrink: 0;
         display: inline-flex;
         align-items: center;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
-
 # -------------------------------------------------------------------------------------------------
 # 3. INISIALISASI SESSION STATE LENGKAP
 # -------------------------------------------------------------------------------------------------
@@ -1681,6 +1772,22 @@ FIELD_COUNTER_CSS = """
   width: 100%;
 }
 
+.field-counter-wrapper.theme-dark {
+  --bg-card: #111827;
+  --bg-surface: #0B1120;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --border-subtle: rgba(148, 163, 184, 0.22);
+}
+
+.field-counter-wrapper.theme-light {
+  --bg-card: #FFFFFF;
+  --bg-surface: #F8FAFC;
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+  --border-subtle: rgba(148, 163, 184, 0.30);
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1695,8 +1802,8 @@ FIELD_COUNTER_CSS = """
 }
 
 .kpi-card {
-  background: var(--st-secondary-background-color, #f8fafc);
-  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.22));
+  background: var(--bg-card, var(--st-secondary-background-color, #f8fafc));
+  border: 1px solid var(--border-subtle, var(--st-border-color, rgba(148, 163, 184, 0.22)));
   border-radius: 12px;
   padding: 14px 18px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -1817,9 +1924,9 @@ FIELD_COUNTER_CSS = """
 }
 
 .ctrl-btn-secondary {
-  background: var(--st-secondary-background-color, #f8fafc);
-  color: var(--st-text-color, #1e293b);
-  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
+  background: var(--bg-card, var(--st-secondary-background-color, #f8fafc));
+  color: var(--text-main, var(--st-text-color, #1e293b));
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.3));
 }
 .ctrl-btn-secondary:hover {
   border-color: #2563EB;
@@ -1829,8 +1936,8 @@ FIELD_COUNTER_CSS = """
 
 .ctrl-btn-outline {
   background: transparent;
-  color: var(--st-text-color, #1e293b);
-  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
+  color: var(--text-main, var(--st-text-color, #1e293b));
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.3));
   opacity: 0.85;
 }
 .ctrl-btn-outline:hover {
@@ -1849,13 +1956,13 @@ FIELD_COUNTER_CSS = """
   gap: 8px;
   font-size: 14.5px;
   font-weight: 800;
-  color: var(--st-text-color, #1e293b);
+  color: var(--text-main, var(--st-text-color, #1e293b));
   margin-bottom: 4px;
 }
 .section-desc {
   font-size: 12px;
-  color: var(--st-text-color, #1e293b);
-  opacity: 0.75;
+  color: var(--text-muted, var(--st-text-color, #1e293b));
+  opacity: 0.85;
   line-height: 1.4;
 }
 
@@ -1878,8 +1985,8 @@ FIELD_COUNTER_CSS = """
 }
 
 .vehicle-card {
-  background: var(--st-secondary-background-color, #f8fafc);
-  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.22));
+  background: var(--bg-card, var(--st-secondary-background-color, #f8fafc));
+  border: 1px solid var(--border-subtle, var(--st-border-color, rgba(148, 163, 184, 0.22)));
   border-top: 4px solid var(--accent) !important;
   border-radius: 12px;
   padding: 14px 10px 10px 10px;
@@ -1935,15 +2042,15 @@ FIELD_COUNTER_CSS = """
 .cat-name {
   font-size: 12px;
   font-weight: 700;
-  color: var(--st-text-color, #1e293b);
+  color: var(--text-main, var(--st-text-color, #1e293b));
   line-height: 1.2;
   margin-bottom: 2px;
 }
 
 .cat-desc {
   font-size: 10.5px;
-  color: var(--st-text-color, #1e293b);
-  opacity: 0.65;
+  color: var(--text-muted, var(--st-text-color, #1e293b));
+  opacity: 0.75;
   height: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1955,7 +2062,7 @@ FIELD_COUNTER_CSS = """
   font-family: 'JetBrains Mono', monospace;
   font-size: 32px;
   font-weight: 800;
-  color: var(--st-text-color, #1e293b);
+  color: var(--text-main, var(--st-text-color, #1e293b));
   line-height: 1.1;
   margin: 6px 0 10px 0;
 }
@@ -1973,9 +2080,9 @@ FIELD_COUNTER_CSS = """
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--st-border-color, rgba(148, 163, 184, 0.3));
-  background: var(--st-background-color, #ffffff);
-  color: var(--st-text-color, #1e293b);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.3));
+  background: var(--bg-surface, var(--st-background-color, #ffffff));
+  color: var(--text-main, var(--st-text-color, #1e293b));
   transition: all 0.12s ease;
   user-select: none;
 }
@@ -2006,7 +2113,7 @@ FIELD_COUNTER_CSS = """
 .summary-total {
   font-size: 13px;
   font-weight: 700;
-  color: var(--st-text-color, #1e293b);
+  color: var(--text-main, var(--st-text-color, #1e293b));
 }
 
 .summary-total-num {
@@ -2020,8 +2127,7 @@ FIELD_COUNTER_CSS = """
 .summary-breakdown {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11.5px;
-  color: var(--st-text-color, #1e293b);
-  opacity: 0.8;
+  color: var(--text-muted, var(--st-text-color, #1e293b));
 }
 
 .toast-container {
@@ -2087,6 +2193,13 @@ export default function(component) {
     if (data.duration_sec) state.duration_sec = Number(data.duration_sec);
     if (data.sesi) state.sesi = String(data.sesi);
     if (data.lokasi) state.lokasi = String(data.lokasi);
+  }
+
+  const wrapper = parentElement.querySelector(".field-counter-wrapper");
+  const themeMode = (data && data.theme_mode) || "light";
+  if (wrapper) {
+    wrapper.classList.remove("theme-light", "theme-dark");
+    wrapper.classList.add(themeMode === "dark" ? "theme-dark" : "theme-light");
   }
 
   const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -2411,13 +2524,14 @@ transmetrics_field_counter = st.components.v2.component(
 )
 
 
-# 6. HEADER UTAMA APLIKASI (MINIMALIS & RAMPING - STANDAR SAAS MODERN)
+# 6. HEADER UTAMA APLIKASI & TOMBOL SAKLAR TEMA (LIGHT / DARK MODE)
 # -------------------------------------------------------------------------------------------------
-st.markdown(f"""
-<div class="app-header-bar">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+col_head_main, col_head_ctrl = st.columns([8.6, 3.4], gap="small")
+with col_head_main:
+    st.markdown(f"""
+    <div class="app-header-bar" style="margin-bottom:0; height:100%; display:flex; align-items:center;">
         <div style="display:flex; align-items:center; gap:12px;">
-            <div style="background:#2563EB; color:#ffffff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(37,99,235,0.25);">
+            <div style="background:#2563EB; color:#ffffff; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(37,99,235,0.25); flex-shrink:0;">
                 {ICONS['road']}
             </div>
             <div>
@@ -2432,14 +2546,32 @@ st.markdown(f"""
                 </div>
             </div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:11px; font-family:'JetBrains Mono',monospace; background:var(--background-color); border:1px solid rgba(148,163,184,0.3); padding:4px 10px; border-radius:6px; color:var(--text-color); opacity:0.85;">
-                PUPR Ditjen Bina Marga
-            </span>
-        </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+with col_head_ctrl:
+    theme_is_dark = st.session_state.get("ui_theme", "light") == "dark"
+    theme_btn_icon = ":material/light_mode:" if theme_is_dark else ":material/dark_mode:"
+    theme_btn_label = "Mode Siang" if theme_is_dark else "Mode Malam"
+    
+    st.markdown('<div style="height: 4px;"></div>', unsafe_allow_html=True)
+    st.button(
+        theme_btn_label,
+        icon=theme_btn_icon,
+        key="btn_toggle_ui_theme",
+        on_click=toggle_ui_theme,
+        use_container_width=True,
+        help="Klik untuk beralih antara Mode Siang (Light) dan Mode Malam (Dark)"
+    )
+    st.markdown(f"""
+    <div style="text-align:center; margin-top:4px;">
+        <span style="font-size:10.5px; font-family:'JetBrains Mono',monospace; background:var(--secondary-background-color); border:1px solid rgba(148,163,184,0.3); padding:3px 8px; border-radius:6px; color:var(--text-color); opacity:0.85;">
+            PUPR Ditjen Bina Marga
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------------------------------
 # 7. SIDEBAR: PARAMETER GEOMETRIK & KONDISI LINGKUNGAN
@@ -2709,6 +2841,10 @@ LOS {los_info['los']}
     # ---------------------------------------------------------------------------------------------
     # 4. Baris 3: GRAFIK BATANG Q VS C & DONUT CHART KOMPOSISI ARMADA
     # ---------------------------------------------------------------------------------------------
+    is_dark_theme = (st.session_state.get("ui_theme", "light") == "dark")
+    plotly_text = "#E2E8F0" if is_dark_theme else "#334155"
+    plotly_grid = "rgba(148, 163, 184, 0.16)" if is_dark_theme else "rgba(148, 163, 184, 0.25)"
+
     g_col1, g_col2 = st.columns([6, 4])
 
     with g_col1:
@@ -2762,16 +2898,16 @@ LOS {los_info['los']}
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
-            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color=plotly_text),
             xaxis=dict(
-                tickfont=dict(size=12, color="#94a3b8"),
-                gridcolor="rgba(148, 163, 184, 0.18)"
+                tickfont=dict(size=12, color=plotly_text),
+                gridcolor=plotly_grid
             ),
             yaxis=dict(
-                title=dict(text="Volume (smp / jam)", font=dict(color="#94a3b8", size=12)),
+                title=dict(text="Volume (smp / jam)", font=dict(color=plotly_text, size=12)),
                 range=[0, y_max],
-                tickfont=dict(color="#94a3b8"),
-                gridcolor="rgba(148, 163, 184, 0.18)"
+                tickfont=dict(color=plotly_text),
+                gridcolor=plotly_grid
             )
         )
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -2814,8 +2950,8 @@ LOS {los_info['los']}
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             showlegend=False,
-            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
-            annotations=[dict(text=f"<b>Total</b><br>{total_kendaraan:,}<br><span style='font-size:10px;'>kend/jam</span>", x=0.5, y=0.5, font_size=12, font=dict(color="#94a3b8"), showarrow=False)]
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color=plotly_text),
+            annotations=[dict(text=f"<b>Total</b><br>{total_kendaraan:,}<br><span style='font-size:10px;'>kend/jam</span>", x=0.5, y=0.5, font_size=12, font=dict(color=plotly_text), showarrow=False)]
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
@@ -3740,7 +3876,8 @@ Modul survei pencacahan lalu lintas lapangan terpadu berstandar <strong>PKJI 202
         data={
             "duration_sec": durasi_target_detik,
             "sesi": survey_sesi,
-            "lokasi": survey_lokasi
+            "lokasi": survey_lokasi,
+            "theme_mode": st.session_state.get("ui_theme", "light")
         },
         on_save_event_change=lambda: None
     )
@@ -4239,6 +4376,10 @@ Gunakan modul interaktif ini saat presentasi/evaluasi langsung untuk menguji aku
         st.dataframe(pd.DataFrame(acc_table_data), use_container_width=True, hide_index=True)
 
     with c_plt:
+        is_dark_val = (st.session_state.get("ui_theme", "light") == "dark")
+        p_text_val = "#E2E8F0" if is_dark_val else "#334155"
+        p_grid_val = "rgba(148, 163, 184, 0.16)" if is_dark_val else "rgba(148, 163, 184, 0.25)"
+
         fig_val = go.Figure()
         fig_val.add_trace(go.Bar(
             name="Manual (Ground Truth)",
@@ -4264,17 +4405,17 @@ Gunakan modul interaktif ini saat presentasi/evaluasi langsung untuk menguji aku
                 y=1.02,
                 xanchor="right",
                 x=1,
-                font=dict(color="#94a3b8", size=11)
+                font=dict(color=p_text_val, size=11)
             ),
-            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="#94a3b8"),
+            font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color=p_text_val),
             xaxis=dict(
-                tickfont=dict(color="#94a3b8", size=12),
-                gridcolor="rgba(148, 163, 184, 0.18)"
+                tickfont=dict(color=p_text_val, size=12),
+                gridcolor=p_grid_val
             ),
             yaxis=dict(
-                title=dict(text="Volume (kendaraan)", font=dict(color="#94a3b8", size=12)),
-                tickfont=dict(color="#94a3b8"),
-                gridcolor="rgba(148, 163, 184, 0.18)"
+                title=dict(text="Volume (kendaraan)", font=dict(color=p_text_val, size=12)),
+                tickfont=dict(color=p_text_val),
+                gridcolor=p_grid_val
             )
         )
         st.plotly_chart(fig_val, use_container_width=True)
