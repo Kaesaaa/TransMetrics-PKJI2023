@@ -126,14 +126,14 @@ if is_dark:
     theme_bg = "#0B1120"
     theme_sec_bg = "#111827"
     theme_card_bg = "#111827"
-    theme_input_bg = "#0F172A"
+    theme_input_bg = "#1E293B"
     theme_text = "#F1F5F9"
     theme_text_sec = "#94A3B8"
     theme_border = "rgba(148, 163, 184, 0.22)"
     theme_hover_bg = "#1E293B"
-    theme_tab_active_bg = "#0B1120"
-    theme_tab_active_text = "#38BDF8"
-    theme_tab_active_border = "rgba(56, 189, 248, 0.35)"
+    theme_tab_active_bg = "rgba(37, 99, 235, 0.14)"
+    theme_tab_active_text = "#2563EB"
+    theme_tab_active_border = "transparent"
 else:
     theme_bg = "#F8FAFC"
     theme_sec_bg = "#FFFFFF"
@@ -143,9 +143,9 @@ else:
     theme_text_sec = "#475569"
     theme_border = "rgba(148, 163, 184, 0.30)"
     theme_hover_bg = "#F1F5F9"
-    theme_tab_active_bg = "#FFFFFF"
+    theme_tab_active_bg = "rgba(37, 99, 235, 0.12)"
     theme_tab_active_text = "#2563EB"
-    theme_tab_active_border = "rgba(37, 99, 235, 0.30)"
+    theme_tab_active_border = "transparent"
 
 st.markdown(f"""
 <style>
@@ -165,10 +165,38 @@ st.markdown(f"""
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }}
 
+    /* Global Smooth Transitions */
+    * {{
+        transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease;
+    }}
+
+    @keyframes smoothFadeIn {{
+        from {{ opacity: 0; transform: translateY(6px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
+
+    [data-baseweb="tab-panel"], .kpi-card, .section-card, .info-card, .roadmap-card, .content-box {{
+        animation: smoothFadeIn 0.28s ease-out;
+    }}
+
     /* 60% Dominan: Latar Netral Bersih */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{
+    .stApp, [data-testid="stAppViewContainer"] {{
         background-color: {theme_bg} !important;
         color: {theme_text} !important;
+    }}
+
+    /* Header Ramping & Transparan: Hilangkan strip putih di Dark Mode */
+    [data-testid="stHeader"] {{
+        background: transparent !important;
+        height: 2.5rem !important;
+    }}
+
+    /* Sembunyikan default Streamlit Cloud toolbar & elements */
+    [data-testid="stToolbar"], [data-testid="stToolbarActions"], [data-testid="stDecoration"],
+    #MainMenu, footer, .stDeployButton,
+    [class*="viewerBadge"], [class*="StatusWidget"] {{
+        display: none !important;
+        visibility: hidden !important;
     }}
 
     [data-testid="stSidebar"] {{
@@ -182,12 +210,19 @@ st.markdown(f"""
         color: {theme_text} !important;
     }}
 
+    /* Padding Atas Lega agar Header Sempurna & Tidak Terpotong */
     .block-container {{
-        padding-top: 1.2rem;
-        padding-bottom: 2rem;
+        padding-top: 2.2rem !important;
+        padding-bottom: 2.5rem !important;
         padding-left: 2rem;
         padding-right: 2rem;
         max-width: 1440px;
+    }}
+
+    /* Paksa Radio & Checkbox Teks Terang di Dark Mode */
+    [data-testid="stRadio"] label, [data-testid="stRadio"] p, [data-testid="stRadio"] span,
+    [data-testid="stCheckbox"] label, [data-testid="stCheckbox"] p, [data-testid="stCheckbox"] span {{
+        color: {theme_text} !important;
     }}
 
     /* Widget Label */
@@ -381,33 +416,60 @@ st.markdown(f"""
         border-radius: 8px;
     }}
 
-    /* Navigasi Tab Segmented */
+    /* Navigasi Modern Floating Pill Tabs (Tanpa Border Kotak Kaku) */
     .stTabs [data-baseweb="tab-list"] {{
-        gap: 6px;
+        gap: 8px;
         background-color: {theme_hover_bg} !important;
-        padding: 5px;
-        border-radius: 10px;
+        padding: 6px;
+        border-radius: 12px;
         border: 1px solid {theme_border} !important;
         margin-bottom: 20px;
     }}
 
     .stTabs [data-baseweb="tab"] {{
         height: 42px;
-        border-radius: 7px;
+        border-radius: 10px !important;
         font-weight: 600;
         font-size: 13.5px;
-        color: {theme_text} !important;
-        opacity: 0.72;
-        padding: 0 18px;
-        transition: all 0.15s ease;
+        color: {theme_text_sec} !important;
+        padding: 8px 18px !important;
+        border: none !important;
+        outline: none !important;
+        background-color: transparent !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }}
+
+    .stTabs [data-baseweb="tab"]:hover {{
+        background-color: rgba(37, 99, 235, 0.08) !important;
+        color: #2563EB !important;
     }}
 
     .stTabs [aria-selected="true"] {{
         background-color: {theme_tab_active_bg} !important;
-        color: {theme_tab_active_text} !important;
-        opacity: 1 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-        border: 1px solid {theme_tab_active_border} !important;
+        color: #2563EB !important;
+        font-weight: 700 !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }}
+
+    .stTabs [data-baseweb="tab-border"], .stTabs [data-baseweb="tab-highlight"] {{
+        display: none !important;
+    }}
+
+    /* Print Media Optimization */
+    @media print {{
+        [data-testid="stSidebar"], [data-testid="stHeader"], .stButton, .controls-row, .card-mini-actions, footer, .action-bar-container {{
+            display: none !important;
+        }}
+        .block-container {{
+            padding: 0 !important;
+            max-width: 100% !important;
+        }}
+        body, .stApp {{
+            background: #ffffff !important;
+            color: #000000 !important;
+        }}
     }}
 
     .info-callout {{
@@ -1284,13 +1346,17 @@ def evaluasi_los(ds: float):
             "los": "A", "status": "Sangat Lancar",
             "keterangan": "Kondisi arus bebas, kecepatan ditentukan oleh batas maksimum jalan.",
             "warna": "#15803d", "bg_color": "#dcfce7", "text_color": "#14532d",
+            "bg_light": "rgba(22, 163, 74, 0.12)", "border_light": "rgba(22, 163, 74, 0.35)", "text_light": "#15803d", "glow_light": "#16a34a",
+            "bg_dark": "rgba(34, 197, 94, 0.16)", "border_dark": "rgba(34, 197, 94, 0.40)", "text_dark": "#4ade80", "glow_dark": "#22c55e",
             "rekomendasi": "Pertahankan kondisi geometrik & marka jalan saat ini. Tidak diperlukan rekayasa struktural."
         }
     elif ds <= 0.44:
         return {
             "los": "B", "status": "Arus Stabil / Lancar",
             "keterangan": "Arus stabil, kecepatan operasi sedikit terbatas oleh interaksi lalu lintas.",
-            "warna": "#22c55e", "bg_color": "#f0fdf4", "text_color": "#166534",
+            "warna": "#10b981", "bg_color": "#f0fdf4", "text_color": "#166534",
+            "bg_light": "rgba(16, 185, 129, 0.12)", "border_light": "rgba(16, 185, 129, 0.35)", "text_light": "#059669", "glow_light": "#10b981",
+            "bg_dark": "rgba(16, 185, 129, 0.16)", "border_dark": "rgba(16, 185, 129, 0.40)", "text_dark": "#34d399", "glow_dark": "#10b981",
             "rekomendasi": "Lakukan pemantauan berkala dan pengawasan parkir liar di bahu jalan."
         }
     elif ds <= 0.74:
@@ -1298,6 +1364,8 @@ def evaluasi_los(ds: float):
             "los": "C", "status": "Arus Stabil / Terkendali",
             "keterangan": "Arus stabil tetapi kecepatan dan kemampuan bermanuver mulai dibatasi kendaraan lain.",
             "warna": "#eab308", "bg_color": "#fef9c3", "text_color": "#854d0e",
+            "bg_light": "rgba(234, 179, 8, 0.16)", "border_light": "rgba(234, 179, 8, 0.45)", "text_light": "#b45309", "glow_light": "#eab308",
+            "bg_dark": "rgba(234, 179, 8, 0.18)", "border_dark": "rgba(234, 179, 8, 0.45)", "text_dark": "#facc15", "glow_dark": "#eab308",
             "rekomendasi": "Zona ideal kapasitas jalan perkotaan. Perketat regulasi on-street parking dan titik penyeberangan."
         }
     elif ds <= 0.84:
@@ -1305,6 +1373,8 @@ def evaluasi_los(ds: float):
             "los": "D", "status": "Mendekati Tak Stabil",
             "keterangan": "Arus mendekati tidak stabil, penurunan kecepatan signifikan saat volume meningkat.",
             "warna": "#f97316", "bg_color": "#ffedd5", "text_color": "#9a3412",
+            "bg_light": "rgba(249, 115, 22, 0.14)", "border_light": "rgba(249, 115, 22, 0.40)", "text_light": "#c2410c", "glow_light": "#f97316",
+            "bg_dark": "rgba(249, 115, 22, 0.18)", "border_dark": "rgba(249, 115, 22, 0.45)", "text_dark": "#fb923c", "glow_dark": "#f97316",
             "rekomendasi": "Peringatan dini (Early Warning). Perlu sterilisasi bahu jalan dan kanalisasi persimpangan."
         }
     elif ds <= 1.00:
@@ -1312,6 +1382,8 @@ def evaluasi_los(ds: float):
             "los": "E", "status": "Arus Kritis / Jenuh",
             "keterangan": "Volume mendekati kapasitas maksimum jalan. Kecepatan sangat rendah dan rawan henti.",
             "warna": "#f43f5e", "bg_color": "#ffe4e6", "text_color": "#9f1239",
+            "bg_light": "rgba(244, 63, 94, 0.14)", "border_light": "rgba(244, 63, 94, 0.40)", "text_light": "#be123c", "glow_light": "#f43f5e",
+            "bg_dark": "rgba(244, 63, 94, 0.18)", "border_dark": "rgba(244, 63, 94, 0.45)", "text_dark": "#fb7185", "glow_dark": "#f43f5e",
             "rekomendasi": "KONDISI KRITIS (Ambang Batas DS=0.85 Terlampaui). Terapkan manajemen lalu lintas, ganjil-genap, atau satu arah."
         }
     else:
@@ -1319,8 +1391,92 @@ def evaluasi_los(ds: float):
             "los": "F", "status": "Macet Total / Breakdown",
             "keterangan": "Arus jenuh melampaui kapasitas. Kecepatan merayap hingga berhenti, antrean panjang terbentuk.",
             "warna": "#b91c1c", "bg_color": "#fee2e2", "text_color": "#7f1d1d",
+            "bg_light": "rgba(220, 38, 38, 0.16)", "border_light": "rgba(220, 38, 38, 0.45)", "text_light": "#991b1b", "glow_light": "#dc2626",
+            "bg_dark": "rgba(220, 38, 38, 0.22)", "border_dark": "rgba(220, 38, 38, 0.50)", "text_dark": "#f87171", "glow_dark": "#dc2626",
             "rekomendasi": "KONDISI DARURAT KEMACETAN. Diperlukan intervensi Dishub/Polantas segera: buka tutup jalur dan pengalihan arus."
         }
+
+
+def render_modern_html_table(data, is_dark: bool = False, max_height: str = None):
+    """
+    Renders a responsive, modern SaaS table (shadcn/ui style) that adapts
+    flawlessly to Light Mode and Dark Mode without the bright white canvas
+    artifact of st.dataframe in Streamlit.
+    """
+    if isinstance(data, list):
+        if not data:
+            st.info("Tidak ada data untuk ditampilkan.")
+            return
+        df = pd.DataFrame(data)
+    elif isinstance(data, pd.DataFrame):
+        df = data
+    else:
+        try:
+            df = pd.DataFrame(data)
+        except Exception:
+            st.info("Tidak ada data untuk ditampilkan.")
+            return
+
+    if df.empty:
+        st.info("Tidak ada data untuk ditampilkan.")
+        return
+
+    bg_table = "#111827" if is_dark else "#FFFFFF"
+    bg_header = "#0F172A" if is_dark else "#F8FAFC"
+    border_color = "rgba(148, 163, 184, 0.22)" if is_dark else "rgba(148, 163, 184, 0.25)"
+    text_primary = "#F1F5F9" if is_dark else "#1E293B"
+    text_secondary = "#94A3B8" if is_dark else "#64748B"
+    hover_bg = "#1E293B" if is_dark else "#F1F5F9"
+    stripe_bg = "rgba(255, 255, 255, 0.025)" if is_dark else "rgba(0, 0, 0, 0.015)"
+
+    headers_html = "".join([
+        f'<th style="padding: 10px 14px; text-align: left; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: {text_secondary}; border-bottom: 1px solid {border_color}; white-space: nowrap;">{col}</th>'
+        for col in df.columns
+    ])
+
+    rows_html = []
+    for idx, (_, row) in enumerate(df.iterrows()):
+        row_bg = stripe_bg if idx % 2 == 1 else bg_table
+        cells = []
+        for col_name, val in row.items():
+            val_str = "" if pd.isna(val) else str(val)
+            col_l = str(col_name).lower()
+            is_mono = any(k in col_l for k in ["no", "kode", "sm", "mp", "ks", "bb", "tb", "q ", "c ", "ds", "phf", "selisih", "total", "fps", "f1", "precision", "recall", "%"])
+            font_family = "'JetBrains Mono', monospace" if is_mono else "'Plus Jakarta Sans', sans-serif"
+
+            if "🟢" in val_str or "LOLOS" in val_str or "MATCH" in val_str:
+                cell_content = f'<span style="background: rgba(16,185,129,0.14); color: #10B981; font-weight: 700; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; border: 1px solid rgba(16,185,129,0.3);">{val_str}</span>'
+            elif "🔴" in val_str or "GAGAL" in val_str:
+                cell_content = f'<span style="background: rgba(239,68,68,0.14); color: #EF4444; font-weight: 700; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; border: 1px solid rgba(239,68,68,0.3);">{val_str}</span>'
+            elif "Sangat Akurat" in val_str:
+                cell_content = f'<span style="background: rgba(16,185,129,0.14); color: #10B981; font-weight: 700; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; border: 1px solid rgba(16,185,129,0.3);">{val_str}</span>'
+            else:
+                cell_content = val_str
+
+            cells.append(
+                f'<td style="padding: 10px 14px; font-size: 12.5px; font-family: {font_family}; color: {text_primary}; border-bottom: 1px solid {border_color}; white-space: nowrap;">{cell_content}</td>'
+            )
+        cells_html = "".join(cells)
+        rows_html.append(
+            f'<tr style="background: {row_bg}; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor=\'{hover_bg}\'" onmouseout="this.style.backgroundColor=\'{row_bg}\'">{cells_html}</tr>'
+        )
+
+    all_rows = "".join(rows_html)
+    overflow_style = f"max-height: {max_height}; overflow-y: auto;" if max_height else ""
+
+    html = f"""
+    <div style="width: 100%; border: 1px solid {border_color}; border-radius: 10px; overflow-x: auto; {overflow_style} background: {bg_table}; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 16px;">
+        <table style="width: 100%; border-collapse: collapse; font-family: 'Plus Jakarta Sans', sans-serif;">
+            <thead style="background: {bg_header}; position: sticky; top: 0; z-index: 1;">
+                <tr>{headers_html}</tr>
+            </thead>
+            <tbody>
+                {all_rows}
+            </tbody>
+        </table>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -1772,7 +1928,7 @@ FIELD_COUNTER_CSS = """
   width: 100%;
 }
 
-.field-counter-wrapper.theme-dark {
+.field-counter-wrapper.theme-dark, :host(.theme-dark), .theme-dark {
   --bg-card: #111827;
   --bg-surface: #0B1120;
   --text-main: #F1F5F9;
@@ -1780,7 +1936,7 @@ FIELD_COUNTER_CSS = """
   --border-subtle: rgba(148, 163, 184, 0.22);
 }
 
-.field-counter-wrapper.theme-light {
+.field-counter-wrapper.theme-light, :host(.theme-light), .theme-light {
   --bg-card: #FFFFFF;
   --bg-surface: #F8FAFC;
   --text-main: #1E293B;
@@ -2195,11 +2351,15 @@ export default function(component) {
     if (data.lokasi) state.lokasi = String(data.lokasi);
   }
 
-  const wrapper = parentElement.querySelector(".field-counter-wrapper");
-  const themeMode = (data && data.theme_mode) || "light";
+  const wrapper = parentElement.querySelector(".field-counter-wrapper") || parentElement;
+  const themeMode = (data && data.theme_mode) ? String(data.theme_mode).toLowerCase() : "light";
   if (wrapper) {
     wrapper.classList.remove("theme-light", "theme-dark");
     wrapper.classList.add(themeMode === "dark" ? "theme-dark" : "theme-light");
+  }
+  if (parentElement && parentElement !== wrapper) {
+    parentElement.classList.remove("theme-light", "theme-dark");
+    parentElement.classList.add(themeMode === "dark" ? "theme-dark" : "theme-light");
   }
 
   const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -2523,10 +2683,220 @@ transmetrics_field_counter = st.components.v2.component(
     isolate_styles=True
 )
 
-
-# 6. HEADER UTAMA APLIKASI & TOMBOL SAKLAR TEMA (LIGHT / DARK MODE)
 # -------------------------------------------------------------------------------------------------
-col_head_main, col_head_ctrl = st.columns([8.6, 3.4], gap="small")
+# 5B. ACTION BAR MINI LANGSUNG DI HEADER (PRINT 1-KLIK & REKAM LAYAR BROWSER .WEBM)
+# -------------------------------------------------------------------------------------------------
+HEADER_ACTIONS_HTML = """
+<div class="action-bar-container">
+  <button id="btn-print" class="act-btn" type="button" title="Cetak Halaman / Simpan PDF (1-Klik)">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+      <rect x="6" y="14" width="12" height="8"></rect>
+    </svg>
+    <span>Print</span>
+  </button>
+  <button id="btn-record" class="act-btn" type="button" title="Mulai / Berhenti Rekam Layar Browser (Auto-Download .webm)">
+    <span id="record-dot" class="record-dot"></span>
+    <span id="record-label">Rekam</span>
+  </button>
+</div>
+"""
+
+HEADER_ACTIONS_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+
+:host {
+  display: block;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+.action-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+}
+
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.30);
+  background: #FFFFFF;
+  color: #1E293B;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.theme-dark .act-btn, :host(.theme-dark) .act-btn {
+  background: #111827 !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  color: #F1F5F9 !important;
+}
+
+.act-btn:hover {
+  border-color: #2563EB !important;
+  color: #2563EB !important;
+  transform: translateY(-1px);
+}
+
+.act-btn:active {
+  transform: scale(0.98);
+}
+
+.record-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #EF4444;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.act-btn.recording {
+  border-color: #EF4444 !important;
+  color: #EF4444 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.act-btn.recording .record-dot {
+  animation: pulse-dot 1s infinite alternate;
+}
+
+@keyframes pulse-dot {
+  from { opacity: 0.3; transform: scale(0.8); box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+  to { opacity: 1; transform: scale(1.2); box-shadow: 0 0 8px rgba(239, 68, 68, 0.7); }
+}
+"""
+
+HEADER_ACTIONS_JS = """
+export default function(component) {
+  const { data, parentElement } = component;
+  if (!parentElement) return;
+
+  const container = parentElement.querySelector(".action-bar-container") || parentElement;
+  const isDark = (data && data.theme_mode === "dark");
+  if (container) {
+    container.classList.remove("theme-light", "theme-dark");
+    container.classList.add(isDark ? "theme-dark" : "theme-light");
+  }
+
+  const btnPrint = parentElement.querySelector("#btn-print");
+  const btnRecord = parentElement.querySelector("#btn-record");
+  const recordLabel = parentElement.querySelector("#record-label");
+
+  if (btnPrint && !btnPrint.__bound) {
+    btnPrint.__bound = true;
+    btnPrint.addEventListener("click", () => {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.print();
+        } else {
+          window.print();
+        }
+      } catch (err) {
+        window.print();
+      }
+    });
+  }
+
+  if (btnRecord && !btnRecord.__bound) {
+    btnRecord.__bound = true;
+    btnRecord.addEventListener("click", async () => {
+      if (window.__tm_recorder && window.__tm_recorder.state === "recording") {
+        window.__tm_recorder.stop();
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert("Perekaman layar browser memerlukan browser desktop modern (Chrome, Edge, Firefox, dsb).");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { displaySurface: "browser" },
+          audio: false
+        });
+
+        const chunks = [];
+        let mimeType = "video/webm";
+        if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
+          mimeType = "video/webm;codecs=vp9";
+        } else if (MediaRecorder.isTypeSupported("video/mp4")) {
+          mimeType = "video/mp4";
+        }
+
+        const recorder = new MediaRecorder(stream, { mimeType });
+        window.__tm_recorder = recorder;
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        const cleanup = () => {
+          btnRecord.classList.remove("recording");
+          if (recordLabel) recordLabel.textContent = "Rekam";
+          stream.getTracks().forEach(t => t.stop());
+          window.__tm_recorder = null;
+        };
+
+        recorder.onstop = () => {
+          cleanup();
+          const blob = new Blob(chunks, { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+          const d = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+          a.href = url;
+          a.download = `transmetrics-screen-record-${ts}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        };
+
+        stream.getVideoTracks()[0].onended = () => {
+          if (recorder.state === "recording") recorder.stop();
+        };
+
+        recorder.start();
+        btnRecord.classList.add("recording");
+        if (recordLabel) recordLabel.textContent = "Stop Rekam";
+      } catch (err) {
+        console.warn("Screen recording cancelled or failed:", err);
+      }
+    });
+  }
+}
+"""
+
+transmetrics_header_actions = st.components.v2.component(
+    "transmetrics_header_actions",
+    html=HEADER_ACTIONS_HTML,
+    css=HEADER_ACTIONS_CSS,
+    js=HEADER_ACTIONS_JS,
+    isolate_styles=True
+)
+
+
+# 6. HEADER UTAMA APLIKASI & ACTION TOOLBAR (TEMA, PRINT 1-KLIK & REKAM LAYAR)
+# -------------------------------------------------------------------------------------------------
+col_head_main, col_head_ctrl = st.columns([7.2, 4.8], gap="small")
 with col_head_main:
     st.markdown(f"""
     <div class="app-header-bar" style="margin-bottom:0; height:100%; display:flex; align-items:center;">
@@ -2553,19 +2923,26 @@ with col_head_ctrl:
     theme_is_dark = st.session_state.get("ui_theme", "light") == "dark"
     theme_btn_icon = ":material/light_mode:" if theme_is_dark else ":material/dark_mode:"
     theme_btn_label = "Mode Siang" if theme_is_dark else "Mode Malam"
-    
-    st.markdown('<div style="height: 4px;"></div>', unsafe_allow_html=True)
-    st.button(
-        theme_btn_label,
-        icon=theme_btn_icon,
-        key="btn_toggle_ui_theme",
-        on_click=toggle_ui_theme,
-        use_container_width=True,
-        help="Klik untuk beralih antara Mode Siang (Light) dan Mode Malam (Dark)"
-    )
+
+    c_btn, c_act = st.columns([1.1, 1.4], gap="small")
+    with c_btn:
+        st.button(
+            theme_btn_label,
+            icon=theme_btn_icon,
+            key="btn_toggle_ui_theme",
+            on_click=toggle_ui_theme,
+            use_container_width=True,
+            help="Klik untuk beralih antara Mode Siang (Light) dan Mode Malam (Dark)"
+        )
+    with c_act:
+        transmetrics_header_actions(
+            key="header_actions_v2",
+            data={"theme_mode": st.session_state.get("ui_theme", "light")}
+        )
+
     st.markdown(f"""
-    <div style="text-align:center; margin-top:4px;">
-        <span style="font-size:10.5px; font-family:'JetBrains Mono',monospace; background:var(--secondary-background-color); border:1px solid rgba(148,163,184,0.3); padding:3px 8px; border-radius:6px; color:var(--text-color); opacity:0.85;">
+    <div style="text-align:center; margin-top:3px;">
+        <span style="font-size:10.5px; font-family:'JetBrains Mono',monospace; background:var(--secondary-background-color); border:1px solid rgba(148,163,184,0.3); padding:2px 8px; border-radius:6px; color:var(--text-color); opacity:0.85;">
             PUPR Ditjen Bina Marga
         </span>
     </div>
@@ -2794,6 +3171,11 @@ Masukkan volume lalu lintas terhitung per jam berdasarkan survei pencacahan manu
     c_kapasitas = c0_default * fc_lj * fc_pa * fc_hs * fc_uk
     ds = q_total / c_kapasitas if c_kapasitas > 0 else 0.0
     los_info = evaluasi_los(ds)
+    los_is_dark = (st.session_state.get("ui_theme", "light") == "dark")
+    los_pill_bg = los_info["bg_dark"] if los_is_dark else los_info["bg_light"]
+    los_pill_border = los_info["border_dark"] if los_is_dark else los_info["border_light"]
+    los_pill_text = los_info["text_dark"] if los_is_dark else los_info["text_light"]
+    los_pill_glow = los_info["glow_dark"] if los_is_dark else los_info["glow_light"]
 
     # ---------------------------------------------------------------------------------------------
     # 3. Baris 2: EMPAT KARTU KPI METRIK UTAMA (DENGAN LUCIDE SVG & MICRO-INTERACTION)
@@ -2826,12 +3208,15 @@ Masukkan volume lalu lintas terhitung per jam berdasarkan survei pencacahan manu
 <div class="kpi-card" style="border-top: 4px solid {los_info['warna']};">
 <div class="kpi-label">
 <span>Tingkat Pelayanan (LOS)</span>
-<span style="color:{los_info['warna']};">{ICONS['traffic_light']}</span>
+<span style="color:{los_pill_text};">{ICONS['traffic_light']}</span>
 </div>
-<div class="los-badge" style="background-color: {los_info['warna']};">
-LOS {los_info['los']}
+<div style="margin: 8px 0 6px 0;">
+    <div style="display:inline-flex; align-items:center; gap:8px; border-radius:9999px; padding:6px 18px; font-weight:800; font-size:22px; font-family:'JetBrains Mono',monospace; background:{los_pill_bg}; border:1px solid {los_pill_border}; color:{los_pill_text};">
+        <span style="width:10px; height:10px; border-radius:50%; background:{los_pill_glow}; box-shadow:0 0 10px {los_pill_glow}; display:inline-block; flex-shrink:0;"></span>
+        LOS {los_info['los']}
+    </div>
 </div>
-<div class="los-desc" style="color: {los_info['warna']};">
+<div style="font-size:12.5px; font-weight:600; color:{los_pill_text}; margin-top:6px;">
 {los_info['status']}
 </div>
 </div>
@@ -2971,7 +3356,7 @@ Proporsi SM: <strong>{((in_sm/total_kendaraan*100) if total_kendaraan>0 else 0):
 <span style="color:#2563EB;">{ICONS['file_text']}</span> Evaluasi & Rekomendasi Teknis Manajemen Rekayasa Lalu Lintas
 </div>
 <p style="font-size:13.5px; margin-bottom:8px;"><strong>Kondisi Operasional:</strong> {los_info['keterangan']}</p>
-<div style="background:{los_info['bg_color']}; color:{los_info['text_color']}; padding:12px 14px; border-radius:8px; font-weight:600; font-size:13px; margin-bottom:10px; border:1px solid rgba(0,0,0,0.06);">
+<div style="background:{los_pill_bg}; color:{los_pill_text}; padding:12px 14px; border-radius:8px; font-weight:600; font-size:13px; margin-bottom:10px; border:1px solid {los_pill_border};">
 <strong>Rekomendasi Ahli Transportasi:</strong><br>{los_info['rekomendasi']}
 </div>
 </div>""", unsafe_allow_html=True)
@@ -3028,7 +3413,7 @@ Proporsi SM: <strong>{((in_sm/total_kendaraan*100) if total_kendaraan>0 else 0):
                     f"{fc_uk:.3f}"
                 ]
             })
-            st.dataframe(df_faktor, use_container_width=True, hide_index=True)
+            render_modern_html_table(df_faktor, is_dark=is_dark_theme)
             st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:11.5px; background:var(--secondary-background-color); color:var(--text-color); padding:8px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.22);">
 Formula: C = C₀ × FC_LJ × FC_PA × FC_HS × FC_UK = <strong>{c_kapasitas:,.1f} smp/jam</strong>
 </div>""", unsafe_allow_html=True)
@@ -3043,7 +3428,7 @@ Formula: C = C₀ × FC_LJ × FC_PA × FC_HS × FC_UK = <strong>{c_kapasitas:,.1
                 "EMP": [f"{emp_sm:.2f}", f"{emp_mp:.2f}", f"{emp_ks:.2f}", f"{emp_bb:.2f}", f"{emp_tb:.2f}", "-"],
                 "Arus (smp/jam)": [f"{q_sm:,.1f}", f"{q_mp:,.1f}", f"{q_ks:,.1f}", f"{q_bb:,.1f}", f"{q_tb:,.1f}", f"{q_total:,.1f}"]
             })
-            st.dataframe(df_volume, use_container_width=True, hide_index=True)
+            render_modern_html_table(df_volume, is_dark=is_dark_theme)
             st.markdown(f"""<div style="font-family:'JetBrains Mono', monospace; font-size:11.5px; background:var(--secondary-background-color); color:var(--text-color); padding:8px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.22);">
 Formula: DS = Q / C = <strong>{ds:.3f}</strong> <span style="color:{los_info['warna']}; font-weight:700;">({los_info['status']})</span>
 </div>""", unsafe_allow_html=True)
@@ -3967,7 +4352,7 @@ Setiap interval yang disimpan manual atau tersimpan otomatis masuk ke database S
                 "Total (kend)": r[12],
                 "Status Simpan": r[13]
             })
-        st.dataframe(pd.DataFrame(data_15), use_container_width=True, hide_index=True)
+        render_modern_html_table(data_15, is_dark=(st.session_state.get("ui_theme", "light") == "dark"), max_height="320px")
 
         # Hitung dan Tampilkan Tabel B: Rekapitulasi Per 1 Jam
         hourly_summary = compute_hourly_summary(all_logs)
@@ -3990,7 +4375,7 @@ Setiap interval yang disimpan manual atau tersimpan otomatis masuk ke database S
                 "Peak Hour Factor (PHF)": f"{h['phf']}" if isinstance(h['phf'], str) else f"{h['phf']:.3f}",
                 "Status Blok": h["status"]
             })
-        st.dataframe(pd.DataFrame(data_hourly), use_container_width=True, hide_index=True)
+        render_modern_html_table(data_hourly, is_dark=(st.session_state.get("ui_theme", "light") == "dark"))
 
         st.markdown(f"""<div style="font-size:11.5px; color:var(--text-color); opacity:0.75; margin-top:4px; margin-bottom:14px;">
 ℹ️ <strong>Peak Hour Factor (PHF)</strong> PKJI 2023: Formula <code>PHF = Q_jam / (4 × V_15_maks)</code>. Nilai mendekati 1.000 mencerminkan arus lalu lintas seragam sepanjang jam puncak.
@@ -4215,7 +4600,7 @@ Seluruh 15 skenario diuji secara real-time mengevaluasi faktor koreksi ($FC_{{LJ
     else:
         df_val_display = df_val.drop(columns=["Kategori"])
 
-    st.dataframe(df_val_display, use_container_width=True, hide_index=True)
+    render_modern_html_table(df_val_display, is_dark=(st.session_state.get("ui_theme", "light") == "dark"), max_height="480px")
 
     # ---------------------------------------------------------------------------------------------
     # BAGIAN B: ALAT UJI VALIDASI AKURASI AI VS CACAH MANUAL (LIVE DEMO SANDBOX)
@@ -4373,7 +4758,7 @@ Gunakan modul interaktif ini saat presentasi/evaluasi langsung untuk menguji aku
                 "Akurasi": f"{cls_acc:.1f}%",
                 "Evaluasi": eval_tag
             })
-        st.dataframe(pd.DataFrame(acc_table_data), use_container_width=True, hide_index=True)
+        render_modern_html_table(acc_table_data, is_dark=(st.session_state.get("ui_theme", "light") == "dark"))
 
     with c_plt:
         is_dark_val = (st.session_state.get("ui_theme", "light") == "dark")
@@ -4431,7 +4816,7 @@ Gunakan modul interaktif ini saat presentasi/evaluasi langsung untuk menguji aku
         {"Kondisi Pengujian": "Malam Hari + CLAHE Auto-Enhance", "Precision": "89.5%", "Recall": "87.3%", "F1-Score": "88.4%", "FPS CPU": "16.8", "Catatan Kinerja": "Peningkatan F1-Score +17.2% via penajaman ruang LAB"},
         {"Kondisi Pengujian": "Hujan Gerimis / Aspal Basah", "Precision": "86.1%", "Recall": "83.4%", "F1-Score": "84.7%", "FPS CPU": "17.1", "Catatan Kinerja": "Pencahayaan difus & refleksi genangan air terkendali"}
     ]
-    st.dataframe(pd.DataFrame(benchmark_data), use_container_width=True, hide_index=True)
+    render_modern_html_table(benchmark_data, is_dark=(st.session_state.get("ui_theme", "light") == "dark"))
 
     # ---------------------------------------------------------------------------------------------
     # BAGIAN C: ARSITEKTUR SISTEM & TRANSPARANSI BATASAN TEKNIS
@@ -4540,7 +4925,11 @@ Mengonversi hitungan durasi video aktual menjadi volume arus kendaraan per jam (
 # -------------------------------------------------------------------------------------------------
 # 9. FOOTER APLIKASI
 # -------------------------------------------------------------------------------------------------
-st.markdown("""<div style="text-align:center; padding:20px 0; color:#94a3b8; font-size:12.5px; border-top:1px solid #e2e8f0; margin-top:30px;">
-<strong>TRANS-METRICS</strong> • Kalkulator Kinerja Ruas Jalan PKJI 2023 & Smart CCTV Monitor YOLO11<br>
-Dikembangkan untuk Keperluan Akademik Tugas Besar Rekayasa Transportasi & Aplikasi Komputer Teknik Sipil • Pedoman Kapasitas Jalan Indonesia 2023
+footer_is_dark = (st.session_state.get("ui_theme", "light") == "dark")
+footer_border = "rgba(148, 163, 184, 0.22)" if footer_is_dark else "rgba(148, 163, 184, 0.25)"
+footer_text = "#94A3B8" if footer_is_dark else "#64748B"
+
+st.markdown(f"""<div style="text-align:center; padding:24px 0 16px 0; color:{footer_text}; font-size:12px; border-top:1px solid {footer_border}; margin-top:32px;">
+<div style="font-weight:700; font-family:'JetBrains Mono', monospace; letter-spacing:0.3px; margin-bottom:4px; color:var(--text-color);">TRANS-METRICS v2.0 • PKJI 2023 & YOLO11 • Powered by Streamlit</div>
+<div style="font-size:11.5px; opacity:0.8;">Kalkulator Kinerja Ruas Jalan Perkotaan Terpadu PKJI 2023 & Pemantauan Cerdas CCTV Dishub • Tugas Besar Rekayasa Transportasi & Aplikasi Komputer</div>
 </div>""", unsafe_allow_html=True)
