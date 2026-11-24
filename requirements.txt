@@ -11,3 +11,4 @@ lapx
 requests
 beautifulsoup4
 yt-dlp
+openpyxl

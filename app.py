@@ -19,7 +19,11 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+import sqlite3
+import io
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import time
 import base64
 import sys
@@ -92,6 +96,12 @@ ICONS = {
     "stop": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/></svg>',
     "database": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>',
     "table": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>',
+    "motorcycle": '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>',
+    "truck": '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18.5" r="2.5"/><circle cx="7" cy="18.5" r="2.5"/></svg>',
+    "bus": '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v6"/><path d="M16 6v6"/><path d="M4 18V8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M2 18h20"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>',
+    "clock": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    "save": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
+    "trash": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>',
 }
 
 # -------------------------------------------------------------------------------------------------
@@ -390,6 +400,24 @@ if "last_annotated_frame" not in st.session_state:
     st.session_state.last_annotated_frame = None
 if "last_annotated_jpeg" not in st.session_state:
     st.session_state.last_annotated_jpeg = None
+
+# State untuk Survei Lapangan (Traffic Counter 15 Menit)
+if "survey_counts" not in st.session_state:
+    st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
+if "survey_timer_running" not in st.session_state:
+    st.session_state.survey_timer_running = False
+if "survey_start_ts" not in st.session_state:
+    st.session_state.survey_start_ts = None
+if "survey_accumulated" not in st.session_state:
+    st.session_state.survey_accumulated = 0.0
+if "survey_start_wib_str" not in st.session_state:
+    st.session_state.survey_start_wib_str = "--:--:--"
+if "survey_last_status" not in st.session_state:
+    st.session_state.survey_last_status = "Standby / Timer Belum Dijalankan"
+if "survey_applied" not in st.session_state:
+    st.session_state.survey_applied = False
+if "survey_applied_label" not in st.session_state:
+    st.session_state.survey_applied_label = ""
 
 # -------------------------------------------------------------------------------------------------
 # 4. PRESET LIVE CCTV KOTA MAGELANG, SMART WEB EXTRACTOR, & HLS STREAM ENGINE
@@ -1202,6 +1230,242 @@ def evaluasi_los(ds: float):
         }
 
 # -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+# 5B. MODUL DATABASE SURVEI LAPANGAN & EKSPOR EXCEL (PKJI 2023)
+# -------------------------------------------------------------------------------------------------
+SURVEY_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "survei_lapangan.db")
+WIB_TZ = timezone(timedelta(hours=7))
+
+def init_survey_db():
+    try:
+        conn = sqlite3.connect(SURVEY_DB_FILE)
+        c = conn.cursor()
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS log_survei (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tanggal TEXT,
+            sesi TEXT,
+            lokasi TEXT,
+            waktu_mulai_wib TEXT,
+            waktu_selesai_wib TEXT,
+            interval_label TEXT,
+            sm INTEGER,
+            mp INTEGER,
+            ks INTEGER,
+            bb INTEGER,
+            tb INTEGER,
+            total INTEGER,
+            metode_simpan TEXT
+        )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error init_survey_db: {e}")
+
+def save_survey_to_db(tanggal, sesi, lokasi, waktu_mulai_wib, waktu_selesai_wib, sm, mp, ks, bb, tb, metode_simpan="Manual"):
+    try:
+        init_survey_db()
+        total = int(sm + mp + ks + bb + tb)
+        interval_label = f"{waktu_mulai_wib} - {waktu_selesai_wib}"
+        conn = sqlite3.connect(SURVEY_DB_FILE)
+        c = conn.cursor()
+        c.execute("""
+        INSERT INTO log_survei (tanggal, sesi, lokasi, waktu_mulai_wib, waktu_selesai_wib, interval_label, sm, mp, ks, bb, tb, total, metode_simpan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tanggal, sesi, lokasi, waktu_mulai_wib, waktu_selesai_wib, interval_label, int(sm), int(mp), int(ks), int(bb), int(tb), total, metode_simpan))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error save_survey_to_db: {e}")
+        return False
+
+def get_all_survey_logs():
+    try:
+        init_survey_db()
+        conn = sqlite3.connect(SURVEY_DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT id, tanggal, sesi, lokasi, waktu_mulai_wib, waktu_selesai_wib, interval_label, sm, mp, ks, bb, tb, total, metode_simpan FROM log_survei ORDER BY id ASC")
+        rows = c.fetchall()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"Error get_all_survey_logs: {e}")
+        return []
+
+def clear_all_survey_logs():
+    try:
+        init_survey_db()
+        conn = sqlite3.connect(SURVEY_DB_FILE)
+        c = conn.cursor()
+        c.execute("DELETE FROM log_survei")
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error clear_all_survey_logs: {e}")
+        return False
+
+def seed_sample_survey_logs(lokasi="Jl. A. Yani - Kota Magelang", sesi="SIANG"):
+    try:
+        clear_all_survey_logs()
+        today_str = datetime.now(WIB_TZ).strftime("%Y-%m-%d")
+        samples = [
+            (today_str, sesi, lokasi, "10:30:00", "10:45:00", "10:30:00 - 10:45:00", 480, 185, 28, 12, 6, 711, "Manual"),
+            (today_str, sesi, lokasi, "10:45:00", "11:00:00", "10:45:00 - 11:00:00", 512, 192, 31, 10, 8, 753, "Auto-Save (+10s)"),
+            (today_str, sesi, lokasi, "11:00:00", "11:15:00", "11:00:00 - 11:15:00", 535, 204, 35, 14, 7, 795, "Manual"),
+            (today_str, sesi, lokasi, "11:15:00", "11:30:00", "11:15:00 - 11:30:00", 498, 178, 26, 9, 5, 716, "Auto-Save (+10s)"),
+            (today_str, sesi, lokasi, "11:30:00", "11:45:00", "11:30:00 - 11:45:00", 520, 195, 30, 11, 7, 763, "Manual"),
+            (today_str, sesi, lokasi, "11:45:00", "12:00:00", "11:45:00 - 12:00:00", 560, 215, 38, 15, 9, 837, "Manual"),
+            (today_str, sesi, lokasi, "12:00:00", "12:15:00", "12:00:00 - 12:15:00", 545, 210, 34, 13, 8, 810, "Auto-Save (+10s)"),
+            (today_str, sesi, lokasi, "12:15:00", "12:30:00", "12:15:00 - 12:30:00", 505, 188, 29, 10, 6, 738, "Manual"),
+        ]
+        conn = sqlite3.connect(SURVEY_DB_FILE)
+        c = conn.cursor()
+        c.executemany("""
+        INSERT INTO log_survei (tanggal, sesi, lokasi, waktu_mulai_wib, waktu_selesai_wib, interval_label, sm, mp, ks, bb, tb, total, metode_simpan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, samples)
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error seed_sample_survey_logs: {e}")
+        return False
+
+def compute_hourly_summary(rows):
+    hourly_blocks = []
+    for i in range(0, len(rows), 4):
+        chunk = rows[i:i+4]
+        b_num = (i // 4) + 1
+        t_start = chunk[0][4]
+        t_end = chunk[-1][5]
+        sm_sum = sum(r[7] for r in chunk)
+        mp_sum = sum(r[8] for r in chunk)
+        ks_sum = sum(r[9] for r in chunk)
+        bb_sum = sum(r[10] for r in chunk)
+        tb_sum = sum(r[11] for r in chunk)
+        total_q = sum(r[12] for r in chunk)
+        max_15 = max(r[12] for r in chunk)
+        
+        if len(chunk) == 4:
+            phf = round(total_q / (4 * max_15), 3) if max_15 > 0 else 1.000
+            status = "Lengkap (4/4 interval)"
+        else:
+            phf = "-"
+            status = f"Belum Penuh ({len(chunk)}/4 interval)"
+            
+        hourly_blocks.append({
+            "no": b_num,
+            "blok": f"Jam ke-{b_num} ({t_start} - {t_end})",
+            "sm": sm_sum, "mp": mp_sum, "ks": ks_sum, "bb": bb_sum, "tb": tb_sum,
+            "total_q": total_q, "max_15": max_15, "phf": phf, "status": status,
+            "is_full": len(chunk) == 4
+        })
+    return hourly_blocks
+
+def generate_survey_excel_bytes(rows, hourly_blocks, lokasi="Jl. A. Yani - Kota Magelang", sesi="SIANG", tanggal="2026-11-24"):
+    wb = openpyxl.Workbook()
+    
+    # Sheet 1: Survei_15_Menit
+    ws1 = wb.active
+    ws1.title = "Survei_15_Menit"
+    
+    ws1.merge_cells("A1:I1")
+    ws1["A1"] = "LAPORAN SURVEI PENCACAHAN LALU LINTAS 15 MENIT (STANDAR PKJI 2023)"
+    ws1["A1"].font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+    ws1["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    
+    ws1.merge_cells("A2:I2")
+    ws1["A2"] = f"Lokasi: {lokasi} | Sesi: {sesi} | Tanggal: {tanggal}"
+    ws1["A2"].font = Font(name="Calibri", size=11, italic=True)
+    ws1["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    
+    headers = ["No", "Interval Waktu (WIB)", "SM (kend)", "MP (kend)", "KS (kend)", "BB (kend)", "TB (kend)", "Total (kend)", "Metode Simpan"]
+    ws1.append([])
+    ws1.append(headers)
+    
+    hdr_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+    
+    for col_idx in range(1, len(headers)+1):
+        cell = ws1.cell(row=4, column=col_idx)
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+        
+    tot_sm = tot_mp = tot_ks = tot_bb = tot_tb = tot_all = 0
+    for idx, r in enumerate(rows, start=1):
+        tot_sm += r[7]
+        tot_mp += r[8]
+        tot_ks += r[9]
+        tot_bb += r[10]
+        tot_tb += r[11]
+        tot_all += r[12]
+        row_data = [idx, r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13]]
+        ws1.append(row_data)
+        curr_row = ws1.max_row
+        for c_idx in range(1, len(headers)+1):
+            c_cell = ws1.cell(row=curr_row, column=c_idx)
+            c_cell.border = thin_border
+            c_cell.alignment = Alignment(horizontal="center" if c_idx in [1, 2, 9] else "right", vertical="center")
+            
+    # Total row
+    ws1.append(["TOTAL", "TOTAL KESELURUHAN", tot_sm, tot_mp, tot_ks, tot_bb, tot_tb, tot_all, "-"])
+    last_r = ws1.max_row
+    tot_border = Border(
+        left=Side(style='thin', color='94A3B8'),
+        right=Side(style='thin', color='94A3B8'),
+        top=Side(style='thin', color='94A3B8'),
+        bottom=Side(style='double', color='1E293B')
+    )
+    for c_idx in range(1, len(headers)+1):
+        cell = ws1.cell(row=last_r, column=c_idx)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+        cell.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        cell.border = tot_border
+        cell.alignment = Alignment(horizontal="center" if c_idx in [1, 2, 9] else "right", vertical="center")
+
+    # Sheet 2: Rekap_Per_1_Jam
+    ws2 = wb.create_sheet(title="Rekap_Per_1_Jam")
+    ws2.merge_cells("A1:K1")
+    ws2["A1"] = "REKAPITULASI ARUS LALU LINTAS PER 1 JAM & PEAK HOUR FACTOR (PHF)"
+    ws2["A1"].font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    
+    headers_2 = ["No", "Blok Jam Survei", "SM (kend)", "MP (kend)", "KS (kend)", "BB (kend)", "TB (kend)", "Total Arus (kend/jam)", "Max 15-Mnt (kend)", "Peak Hour Factor (PHF)", "Status Blok"]
+    ws2.append([])
+    ws2.append(headers_2)
+    for col_idx in range(1, len(headers_2)+1):
+        cell = ws2.cell(row=3, column=col_idx)
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+        
+    for idx, h in enumerate(hourly_blocks, start=1):
+        r_data = [idx, h["blok"], h["sm"], h["mp"], h["ks"], h["bb"], h["tb"], h["total_q"], h["max_15"], h["phf"], h["status"]]
+        ws2.append(r_data)
+        c_row = ws2.max_row
+        for c_idx in range(1, len(headers_2)+1):
+            cell = ws2.cell(row=c_row, column=c_idx)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center" if c_idx in [1, 2, 10, 11] else "right", vertical="center")
+            
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 # 6. HEADER UTAMA APLIKASI (MINIMALIS & RAMPING - STANDAR SAAS MODERN)
 # -------------------------------------------------------------------------------------------------
 st.markdown(f"""
@@ -1340,9 +1604,10 @@ Karakteristik Fisik & Lingkungan Ruas Jalan
 # -------------------------------------------------------------------------------------------------
 # 8. TAB UTAMA APLIKASI (DILENGKAPI TAB 3 VALIDASI & AKURASI 25%)
 # -------------------------------------------------------------------------------------------------
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "Kalkulator Kinerja Ruas Jalan (PKJI 2023)",
     "Integrasi Smart CCTV Dishub (Real-Time AI)",
+    "Survei Lapangan (Traffic Counter)",
     "Validasi, Akurasi & Arsitektur"
 ])
 
@@ -2479,10 +2744,449 @@ yang dipadukan dengan algoritma multi-object tracking <strong>ByteTrack</strong>
             st.rerun()
 
 
+
 # =================================================================================================
-# KONTEN TAB 3: VALIDASI MATEMATIS PKJI 2023, AKURASI AI & ARSITEKTUR SISTEM (BOBOT 25%)
+# KONTEN TAB 3: SURVEI LAPANGAN (MANUAL TRAFFIC COUNTER 15 MENIT & DATABASE)
 # =================================================================================================
 with tab3:
+    st.markdown(f"""<div class="content-box">
+<div class="content-box-title">
+<span style="color:#2563EB;">{ICONS['table']}</span> Survei Pencacahan Lalu Lintas Lapangan (Manual Traffic Counter 15 Menit)
+</div>
+<p style="font-size:13.5px; color:var(--text-color); opacity:0.75; margin-top:-8px; margin-bottom:18px;">
+Modul survei pencacahan lalu lintas lapangan terpadu berstandar <strong>PKJI 2023</strong>. Dilengkapi jam digital real-time (WIB), timer interval 15 menit, notifikasi peringatan interval, penyimpanan otomatis (<em>Auto-Save</em>), pencatatan database lokal SQLite, rekapitulasi kelompok 1 jam & <em>Peak Hour Factor</em> (PHF), sinkronisasi langsung ke Tab 1, serta ekspor laporan resmi format Microsoft Excel (<code>.xlsx</code>).
+</p>""", unsafe_allow_html=True)
+
+    # 1. METADATA SURVEI
+    meta_c1, meta_c2, meta_c3 = st.columns([5, 3, 4])
+    with meta_c1:
+        survey_lokasi = st.text_input(
+            "Nama Ruas / Lokasi Survei:",
+            value=st.session_state.get("survey_lokasi", "Jl. A. Yani - Kota Magelang"),
+            help="Nama ruas jalan, pos pantau, atau titik pencacahan survei lapangan."
+        )
+        st.session_state.survey_lokasi = survey_lokasi
+
+    with meta_c2:
+        survey_sesi = st.selectbox(
+            "Sesi Survei:",
+            options=["PAGI", "SIANG", "SORE", "MALAM"],
+            index=1,
+            help="Sesi periode pengamatan lalu lintas di lapangan."
+        )
+        st.session_state.survey_sesi = survey_sesi
+
+    with meta_c3:
+        survey_mode = st.selectbox(
+            "Mode Durasi Interval:",
+            options=["15 Menit (Standar PKJI 2023)", "30 Detik (Mode Demo Presentasi)"],
+            index=0,
+            help="Gunakan '15 Menit' untuk survei riil di jalan, atau '30 Detik' untuk menguji notifikasi pengingat & auto-save secara cepat saat presentasi."
+        )
+        st.session_state.survey_mode = survey_mode
+
+    durasi_target_detik = 900 if "15 Menit" in survey_mode else 30
+
+    st.markdown("---")
+
+    # 2. PANEL JAM DIGITAL & TIMER INTERVAL BERJALAN (@st.fragment)
+    @st.fragment(run_every="1s")
+    def render_survey_timer_panel(durasi_detik, lokasi, sesi):
+        now_wib = datetime.now(WIB_TZ)
+        now_str = now_wib.strftime("%H:%M:%S WIB")
+        hari_map = {0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"}
+        bulan_map = {1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"}
+        date_str = f"{hari_map[now_wib.weekday()]}, {now_wib.day} {bulan_map[now_wib.month]} {now_wib.year}"
+        
+        is_running = st.session_state.get("survey_timer_running", False)
+        accum = st.session_state.get("survey_accumulated", 0.0)
+        start_ts = st.session_state.get("survey_start_ts", None)
+        
+        if is_running and start_ts is not None:
+            elapsed = accum + (time.time() - start_ts)
+        else:
+            elapsed = accum
+            
+        # Logika Auto-Save jika melewati durasi + 10 detik
+        if is_running and elapsed >= (durasi_detik + 10):
+            start_wib = st.session_state.get("survey_start_wib_str", now_wib.strftime("%H:%M:%S"))
+            end_wib = now_wib.strftime("%H:%M:%S")
+            counts = st.session_state.get("survey_counts", {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0})
+            save_survey_to_db(
+                tanggal=now_wib.strftime("%Y-%m-%d"),
+                sesi=sesi,
+                lokasi=lokasi,
+                waktu_mulai_wib=start_wib,
+                waktu_selesai_wib=end_wib,
+                sm=counts["SM"], mp=counts["MP"], ks=counts["KS"], bb=counts["BB"], tb=counts["TB"],
+                metode_simpan="Auto-Save (+10s)"
+            )
+            # Reset counter aktif
+            st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
+            # Reset timer untuk interval berikutnya
+            st.session_state.survey_accumulated = 0.0
+            st.session_state.survey_start_ts = time.time()
+            st.session_state.survey_start_wib_str = end_wib
+            st.session_state.survey_last_status = f"Interval otomatis tersimpan ({start_wib} - {end_wib}) [+10s]"
+            st.toast("Data interval otomatis tersimpan ke database!", icon="💾")
+            st.rerun(scope="app")
+            return
+            
+        # 3 Kartu Panel Timer
+        t_c1, t_c2, t_c3 = st.columns(3)
+        with t_c1:
+            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid #2563EB !important; padding: 12px 16px;">
+    <div class="kpi-label">
+        <span>JAM REAL-TIME (WIB)</span>
+        <span style="color:#2563EB;">{ICONS['clock']}</span>
+    </div>
+    <div class="kpi-value" style="font-size: 24px; color:#2563EB !important;">{now_str}</div>
+    <div class="kpi-subtext" style="font-size: 11.5px;">{date_str}</div>
+</div>""", unsafe_allow_html=True)
+
+        with t_c2:
+            curr_m = int(elapsed // 60)
+            curr_s = int(elapsed % 60)
+            max_m = int(durasi_detik // 60)
+            max_s = int(durasi_detik % 60)
+            timer_str = f"{curr_m:02d}:{curr_s:02d} / {max_m:02d}:{max_s:02d}"
+            timer_color = "#10B981" if is_running else "#64748B"
+            timer_state_label = "SEDANG MENCACAH" if is_running else "TIMER DIJEDA / SIAGA"
+            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid {timer_color} !important; padding: 12px 16px;">
+    <div class="kpi-label">
+        <span>TIMER INTERVAL ({int(durasi_detik//60) if durasi_detik>=60 else durasi_detik} {'MNT' if durasi_detik>=60 else 'DTK'})</span>
+        <span style="color:{timer_color};">{ICONS['activity']}</span>
+    </div>
+    <div class="kpi-value" style="font-size: 24px; color:{timer_color} !important;">{timer_str}</div>
+    <div class="kpi-subtext" style="font-size: 11.5px;">● {timer_state_label}</div>
+</div>""", unsafe_allow_html=True)
+
+        with t_c3:
+            if is_running and elapsed >= durasi_detik:
+                status_color = "#EF4444"
+                sisa_auto = max(0, int(durasi_detik + 10 - elapsed))
+                status_title = f"TOLERANSI AUTO-SAVE ({sisa_auto}s)"
+                status_desc = f"Data akan tersimpan dalam {sisa_auto} detik..."
+            elif is_running and elapsed >= (durasi_detik - 15):
+                status_color = "#F59E0B"
+                status_title = "PERINGATAN AKHIR"
+                status_desc = f"{max(0, int(durasi_detik - elapsed))} detik menuju akhir interval"
+            elif is_running:
+                status_color = "#2563EB"
+                status_title = "INTERVAL AKTIF"
+                status_desc = f"Mulai: {st.session_state.get('survey_start_wib_str', '--:--:--')}"
+            else:
+                status_color = "#64748B"
+                status_title = "SIAGA (STANDBY)"
+                status_desc = st.session_state.get("survey_last_status", "Tekan Mulai Timer Sesi")
+
+            st.markdown(f"""<div class="kpi-card" style="border-left: 4px solid {status_color} !important; padding: 12px 16px;">
+    <div class="kpi-label">
+        <span>STATUS INTERVAL & SIMPAN</span>
+        <span style="color:{status_color};">{ICONS['save']}</span>
+    </div>
+    <div class="kpi-value" style="font-size: 18px; color:{status_color} !important; font-weight:800;">{status_title}</div>
+    <div class="kpi-subtext" style="font-size: 11.5px;">{status_desc}</div>
+</div>""", unsafe_allow_html=True)
+
+        # Alert Banner Visual
+        if is_running and elapsed >= durasi_detik:
+            sisa_auto = max(0, int(durasi_detik + 10 - elapsed))
+            st.markdown(f"""<div style="background:rgba(239, 68, 68, 0.12); border:1px solid #ef4444; border-radius:8px; padding:10px 14px; margin-top:12px; color:#ef4444; font-weight:700; display:flex; align-items:center; gap:8px;">
+<span style="font-size:18px;">🚨</span>
+<span>WAKTU INTERVAL SELESAI! Klik 'Simpan & Lanjut' atau data akan TERSIMPAN OTOMATIS dalam {sisa_auto} detik...</span>
+</div>""", unsafe_allow_html=True)
+        elif is_running and elapsed >= (durasi_detik - 15):
+            sisa_w = max(0, int(durasi_detik - elapsed))
+            st.markdown(f"""<div style="background:rgba(245, 158, 11, 0.12); border:1px solid #f59e0b; border-radius:8px; padding:10px 14px; margin-top:12px; color:#d97706; font-weight:700; display:flex; align-items:center; gap:8px;">
+<span style="font-size:18px;">⚠️</span>
+<span>Perhatian: {sisa_w} detik menuju akhir interval! Bersiap untuk menyimpan data pencacahan.</span>
+</div>""", unsafe_allow_html=True)
+
+        # Tombol Kontrol Sesi & Timer
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+        c_b1, c_b2, c_b3 = st.columns([4, 5, 3])
+        with c_b1:
+            if not is_running:
+                if st.button("▶️ Mulai Timer Sesi", key="btn_timer_start", use_container_width=True):
+                    st.session_state.survey_timer_running = True
+                    st.session_state.survey_start_ts = time.time()
+                    if st.session_state.get("survey_start_wib_str", "--:--:--") == "--:--:--":
+                        st.session_state.survey_start_wib_str = now_wib.strftime("%H:%M:%S")
+                    st.rerun(scope="app")
+            else:
+                if st.button("⏸️ Jeda Timer", key="btn_timer_pause", use_container_width=True):
+                    if st.session_state.get("survey_start_ts") is not None:
+                        st.session_state.survey_accumulated += (time.time() - st.session_state.survey_start_ts)
+                    st.session_state.survey_start_ts = None
+                    st.session_state.survey_timer_running = False
+                    st.rerun(scope="app")
+
+        with c_b2:
+            if st.button("💾 Simpan & Lanjut Interval", key="btn_timer_save_next", type="primary", use_container_width=True):
+                start_wib = st.session_state.get("survey_start_wib_str", now_wib.strftime("%H:%M:%S"))
+                end_wib = now_wib.strftime("%H:%M:%S")
+                counts = st.session_state.get("survey_counts", {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0})
+                save_survey_to_db(
+                    tanggal=now_wib.strftime("%Y-%m-%d"),
+                    sesi=sesi,
+                    lokasi=lokasi,
+                    waktu_mulai_wib=start_wib,
+                    waktu_selesai_wib=end_wib,
+                    sm=counts["SM"], mp=counts["MP"], ks=counts["KS"], bb=counts["BB"], tb=counts["TB"],
+                    metode_simpan="Manual"
+                )
+                st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
+                st.session_state.survey_accumulated = 0.0
+                st.session_state.survey_start_ts = time.time() if is_running else None
+                st.session_state.survey_start_wib_str = end_wib
+                st.session_state.survey_last_status = f"Interval manual tersimpan ({start_wib} - {end_wib})"
+                st.toast("Data interval berhasil disimpan ke database!", icon="✅")
+                st.rerun(scope="app")
+
+        with c_b3:
+            if st.button("🔄 Reset Counter", key="btn_timer_reset_cnt", use_container_width=True):
+                st.session_state.survey_counts = {"SM": 0, "MP": 0, "KS": 0, "BB": 0, "TB": 0}
+                st.toast("Counter aktif telah di-reset ke 0!", icon="🔄")
+                st.rerun(scope="app")
+
+    # Panggil panel timer (fragment)
+    render_survey_timer_panel(durasi_target_detik, survey_lokasi, survey_sesi)
+
+    st.markdown("---")
+
+    # 3. PAPAN TOMBOL PENCACAHAN MODERN (5 KATEGORI PKJI 2023)
+    st.markdown(f"""<div class="content-box-title" style="margin-bottom:12px;">
+<span style="color:#2563EB;">{ICONS['car']}</span> Papan Tombol Pencacahan Manual (5 Kategori PKJI 2023)
+</div>
+<p style="font-size:12.5px; color:var(--text-color); opacity:0.75; margin-top:-6px; margin-bottom:14px;">
+Gunakan tombol <strong>+1</strong> untuk mencacah setiap kendaraan yang melintas. Gunakan <strong>-1</strong> untuk koreksi (Undo) dan <strong>+5</strong> untuk rombongan kendaraan padat.
+</p>""", unsafe_allow_html=True)
+
+    # 5 Kartu Kategori
+    vehicle_cats = [
+        {"code": "SM", "name": "Sepeda Motor", "desc": "Roda 2 & Roda 3", "accent": "#0284C7", "icon": ICONS['motorcycle']},
+        {"code": "MP", "name": "Mobil Penumpang", "desc": "Sedan, Minibus, Van", "accent": "#2563EB", "icon": ICONS['car']},
+        {"code": "KS", "name": "Kendaraan Sedang", "desc": "Truk 2 As & Bus Sedang", "accent": "#10B981", "icon": ICONS['truck']},
+        {"code": "BB", "name": "Bus Besar", "desc": "Bus 2 As / 3 As", "accent": "#F59E0B", "icon": ICONS['bus']},
+        {"code": "TB", "name": "Truk Berat", "desc": "Tronton, Gandeng, Tempel", "accent": "#8B5CF6", "icon": ICONS['truck']}
+    ]
+
+    v_cols = st.columns(5)
+    for idx, v in enumerate(vehicle_cats):
+        code = v["code"]
+        val = st.session_state.survey_counts.get(code, 0)
+        with v_cols[idx]:
+            st.markdown(f"""<div class="kpi-card" style="border-top: 4px solid {v['accent']} !important; text-align: center; padding: 12px 8px; margin-bottom: 8px;">
+    <div style="color:{v['accent']}; margin-bottom: 2px;">{v['icon']}</div>
+    <div style="margin-bottom: 2px;">
+        <span style="background:{v['accent']}; color:#ffffff; font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:6px;">{code}</span>
+    </div>
+    <div style="font-size:11.5px; font-weight:600; color:var(--text-color); opacity:0.85; line-height:1.2; height:26px; display:flex; align-items:center; justify-content:center;">
+        {v['name']}
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:30px; font-weight:800; color:var(--text-color); margin:4px 0 2px 0;">
+        {val:,}
+    </div>
+</div>""", unsafe_allow_html=True)
+            
+            # Tombol +1
+            if st.button(f"+1", key=f"btn_p1_{code}", type="primary", use_container_width=True):
+                st.session_state.survey_counts[code] += 1
+                st.rerun()
+                
+            # Tombol -1 dan +5
+            sub_c1, sub_c2 = st.columns(2)
+            with sub_c1:
+                if st.button("-1", key=f"btn_m1_{code}", use_container_width=True):
+                    st.session_state.survey_counts[code] = max(0, st.session_state.survey_counts[code] - 1)
+                    st.rerun()
+            with sub_c2:
+                if st.button("+5", key=f"btn_p5_{code}", use_container_width=True):
+                    st.session_state.survey_counts[code] += 5
+                    st.rerun()
+
+    # Total Bar Active
+    tot_active = sum(st.session_state.survey_counts.values())
+    st.markdown(f"""<div style="background:rgba(37, 99, 235, 0.06); border:1px solid rgba(37, 99, 235, 0.2); border-radius:8px; padding:10px 16px; margin-top:10px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <div style="font-size:13px; font-weight:700; color:var(--text-color);">
+        Total Hitungan Interval Aktif: <span style="font-family:'JetBrains Mono', monospace; font-size:16px; color:#2563EB;">{tot_active:,} kend</span>
+    </div>
+    <div style="font-size:12px; color:var(--text-color); opacity:0.8; font-family:'JetBrains Mono', monospace;">
+        SM: {st.session_state.survey_counts['SM']} | MP: {st.session_state.survey_counts['MP']} | KS: {st.session_state.survey_counts['KS']} | BB: {st.session_state.survey_counts['BB']} | TB: {st.session_state.survey_counts['TB']}
+    </div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # 4. DATABASE RIWAYAT SURVEI & REKAPITULASI KELOMPOK PER 1 JAM (PHF)
+    st.markdown(f"""<div class="content-box-title" style="margin-bottom:10px;">
+<span style="color:#2563EB;">{ICONS['database']}</span> Database Riwayat Survei Lapangan & Rekapitulasi 1 Jam (PHF)
+</div>
+<p style="font-size:12.5px; color:var(--text-color); opacity:0.75; margin-top:-6px; margin-bottom:14px;">
+Setiap interval yang disimpan manual atau tersimpan otomatis masuk ke database SQLite lokal. Sistem secara otomatis mengelompokkan setiap 4 interval (15 menit × 4) menjadi 1 blok jam penuh dan menghitung <strong>Peak Hour Factor (PHF)</strong>.
+</p>""", unsafe_allow_html=True)
+
+    # Tombol Aksi Database
+    act_c1, act_c2 = st.columns([6, 6])
+    with act_c1:
+        if st.button("📋 Muat 8 Data Contoh Survei (2 Jam)", key="btn_seed_sample_db", use_container_width=True):
+            seed_sample_survey_logs(lokasi=survey_lokasi, sesi=survey_sesi)
+            st.toast("8 data interval contoh (2 Jam) berhasil dimuat ke database!", icon="📋")
+            st.rerun()
+
+    with act_c2:
+        if st.button("🗑️ Hapus Semua Riwayat Database", key="btn_clear_db", use_container_width=True):
+            clear_all_survey_logs()
+            st.toast("Seluruh riwayat survei di database berhasil dibersihkan!", icon="🗑️")
+            st.rerun()
+
+    # Ambil Data dari Database
+    all_logs = get_all_survey_logs()
+    
+    if len(all_logs) == 0:
+        st.markdown(f"""<div style="background:var(--secondary-background-color); border:2px dashed rgba(148, 163, 184, 0.3); border-radius:10px; padding:32px 20px; text-align:center; margin-top:12px;">
+    <div style="color:#2563EB; margin-bottom:8px;">{ICONS['database']}</div>
+    <div style="font-size:15px; font-weight:700; color:var(--text-color); margin-bottom:4px;">Database Survei Masih Kosong</div>
+    <div style="font-size:12.5px; color:var(--text-color); opacity:0.7; max-width:500px; margin:0 auto 12px auto;">
+        Mulai pencacahan dengan menekan tombol <strong>Mulai Timer Sesi</strong> dan simpan interval secara berkala, atau klik <strong>Muat 8 Data Contoh Survei (2 Jam)</strong> di atas untuk mencoba fitur rekapitulasi PHF & ekspor Excel.
+    </div>
+</div>""", unsafe_allow_html=True)
+    else:
+        # Format Tabel A: Riwayat Per 15 Menit
+        st.markdown(f"""<div style="font-size:13px; font-weight:700; color:var(--text-color); margin-top:14px; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+<span>{ICONS['table']}</span> Tabel A — Riwayat Pencacahan Per Interval 15 Menit ({len(all_logs)} Interval Tercatat):
+</div>""", unsafe_allow_html=True)
+
+        data_15 = []
+        for idx, r in enumerate(all_logs, start=1):
+            data_15.append({
+                "No": idx,
+                "Sesi": r[2],
+                "Interval Waktu (WIB)": r[6],
+                "SM": r[7],
+                "MP": r[8],
+                "KS": r[9],
+                "BB": r[10],
+                "TB": r[11],
+                "Total (kend)": r[12],
+                "Status Simpan": r[13]
+            })
+        st.dataframe(pd.DataFrame(data_15), use_container_width=True, hide_index=True)
+
+        # Hitung dan Tampilkan Tabel B: Rekapitulasi Per 1 Jam
+        hourly_summary = compute_hourly_summary(all_logs)
+        st.markdown(f"""<div style="font-size:13px; font-weight:700; color:var(--text-color); margin-top:18px; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+<span>{ICONS['layers']}</span> Tabel B — Rekapitulasi Kelompok Per 1 Jam Penuh (Setiap 4 × 15 Menit) & Peak Hour Factor (PHF):
+</div>""", unsafe_allow_html=True)
+
+        data_hourly = []
+        for h in hourly_summary:
+            data_hourly.append({
+                "No": h["no"],
+                "Blok Jam Survei": h["blok"],
+                "SM": h["sm"],
+                "MP": h["mp"],
+                "KS": h["ks"],
+                "BB": h["bb"],
+                "TB": h["tb"],
+                "Total Arus (kend/jam)": f"{h['total_q']:,}",
+                "Max 15-Mnt (kend)": f"{h['max_15']:,}",
+                "Peak Hour Factor (PHF)": f"{h['phf']}" if isinstance(h['phf'], str) else f"{h['phf']:.3f}",
+                "Status Blok": h["status"]
+            })
+        st.dataframe(pd.DataFrame(data_hourly), use_container_width=True, hide_index=True)
+
+        st.markdown(f"""<div style="font-size:11.5px; color:var(--text-color); opacity:0.75; margin-top:4px; margin-bottom:14px;">
+ℹ️ <strong>Peak Hour Factor (PHF)</strong> PKJI 2023: Formula <code>PHF = Q_jam / (4 × V_15_maks)</code>. Nilai mendekati 1.000 mencerminkan arus lalu lintas seragam sepanjang jam puncak.
+</div>""", unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # 5. SINKRONISASI DATA SURVEI KE TAB 1
+        st.markdown(f"""<div class="content-box-title" style="margin-bottom:10px;">
+<span style="color:#2563EB;">{ICONS['refresh']}</span> Sinkronisasi Data Survei ke Tab 1 (Kalkulator Kinerja Jalan)
+</div>
+<p style="font-size:12.5px; color:var(--text-color); opacity:0.75; margin-top:-6px; margin-bottom:14px;">
+Pilih salah satu blok rekap 1 jam penuh ATAU salah satu interval 15 menit (otomatis diproyeksikan ×4 ke kend/jam) untuk dievaluasi kapasitas ($C$), derajat kejenuhan ($DS$), dan tingkat pelayanan ($LOS$) di Tab 1.
+</p>""", unsafe_allow_html=True)
+
+        # Siapkan opsi sinkronisasi
+        sync_options = []
+        sync_data_map = {}
+
+        # Opsi 1 Jam
+        for h in hourly_summary:
+            label_h = f"[REKAP 1 JAM] {h['blok']} — Total: {h['total_q']:,} kend/jam (PHF: {h['phf']})"
+            sync_options.append(label_h)
+            sync_data_map[label_h] = {
+                "sm": h["sm"], "mp": h["mp"], "ks": h["ks"], "bb": h["bb"], "tb": h["tb"],
+                "desc": f"Rekap 1 Jam: {h['blok']}"
+            }
+
+        # Opsi Interval 15 Menit (x4)
+        for idx, r in enumerate(all_logs, start=1):
+            tot_proj = r[12] * 4
+            label_i = f"[INTERVAL 15 MNT × 4] Intv #{idx} ({r[6]}) — Proyeksi: {tot_proj:,} kend/jam"
+            sync_options.append(label_i)
+            sync_data_map[label_i] = {
+                "sm": r[7] * 4, "mp": r[8] * 4, "ks": r[9] * 4, "bb": r[10] * 4, "tb": r[11] * 4,
+                "desc": f"Interval #{idx} ({r[6]}) diproyeksikan 1 jam (×4)"
+            }
+
+        sel_sync = st.selectbox(
+            "Pilih Paket Data Survei untuk Diterapkan:",
+            options=sync_options,
+            index=0,
+            help="Pilih rekapitulasi 1 jam riil atau hasil proyeksi interval 15 menit."
+        )
+
+        if st.button("🚀 Terapkan Data Survei Lapangan ke Tab 1", type="primary", use_container_width=True):
+            chosen = sync_data_map[sel_sync]
+            st.session_state.vol_sm = int(chosen["sm"])
+            st.session_state.vol_mp = int(chosen["mp"])
+            st.session_state.vol_ks = int(chosen["ks"])
+            st.session_state.vol_bb = int(chosen["bb"])
+            st.session_state.vol_tb = int(chosen["tb"])
+            st.session_state.survey_applied = True
+            st.session_state.survey_applied_label = chosen["desc"]
+            st.toast("Data survei lapangan berhasil diterapkan ke Tab 1!", icon="🚦")
+            st.rerun()
+
+        st.markdown("---")
+
+        # 6. EKSPOR LAPORAN RESMI EXCEL (.XLSX)
+        st.markdown(f"""<div class="content-box-title" style="margin-bottom:10px;">
+<span style="color:#2563EB;">{ICONS['file_text']}</span> Ekspor Laporan Resmi Microsoft Excel (.xlsx)
+</div>
+<p style="font-size:12.5px; color:var(--text-color); opacity:0.75; margin-top:-6px; margin-bottom:14px;">
+Unduh berkas spreadsheet <code>.xlsx</code> yang sudah diformat rapi dengan 2 lembar kerja (<em>Sheet 1: Survei_15_Menit</em> dan <em>Sheet 2: Rekap_Per_1_Jam</em>) berstandar laporan teknik sipil dan Dinas Perhubungan.
+</p>""", unsafe_allow_html=True)
+
+        today_export_str = datetime.now(WIB_TZ).strftime("%Y-%m-%d")
+        excel_bytes = generate_survey_excel_bytes(
+            rows=all_logs,
+            hourly_blocks=hourly_summary,
+            lokasi=survey_lokasi,
+            sesi=survey_sesi,
+            tanggal=today_export_str
+        )
+
+        st.download_button(
+            label="📥 Unduh Laporan Survei Excel (.xlsx)",
+            data=excel_bytes,
+            file_name=f"LAPORAN_SURVEI_LALU_LINTAS_PKJI_{today_export_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =================================================================================================
+# KONTEN TAB 4: VALIDASI MATEMATIS PKJI 2023, AKURASI AI & ARSITEKTUR SISTEM (BOBOT 25%)
+# =================================================================================================
+with tab4:
     st.markdown(f"""<div class="content-box">
 <div class="content-box-title">
 <span style="color:#2563EB;">{ICONS['shield_check']}</span> Validasi Matematis PKJI 2023 & Verifikasi Akurasi AI (Bobot 25% Rubrik)
